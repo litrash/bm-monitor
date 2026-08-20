@@ -56,11 +56,18 @@ def load_config():
 # --------------------------------------------------------------------------- #
 # 抓取与解析
 # --------------------------------------------------------------------------- #
-def fetch_html(url):
-    r = requests.get(url, headers={"User-Agent": UA}, timeout=30)
-    r.raise_for_status()
-    r.encoding = r.apparent_encoding or "utf-8"
-    return r.text
+def fetch_html(url, retries=3):
+    for i in range(retries):
+        try:
+            r = requests.get(url, headers={"User-Agent": UA}, timeout=30)
+            r.raise_for_status()
+            r.encoding = r.apparent_encoding or "utf-8"
+            return r.text
+        except Exception as e:
+            if i == retries - 1:
+                raise
+            log.warning("第%d次抓取失败: %s, %d秒后重试...", i + 1, e, (i + 1) * 5)
+            time.sleep((i + 1) * 5)
 
 
 def _clean(s):
