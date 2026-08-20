@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-08-20T14:47:06",
+  "updated_at": "2026-08-20T15:07:28",
   "entries": [
     {
       "key": "甘孜藏族自治州|甘孜州2026年公开招募养老服务管理专员招募|2026年08月21日 09:00|2026年08月24日 18:00",
@@ -10,9 +10,8 @@
       "pay_start": "2026年08月21日 09:00",
       "pay_end": "2026年08月25日 17:30",
       "phase": "upcoming",
-      "remaining": 600,
+      "remaining": 540,
       "signup_url": "",
-      "info_url": "",
       "external_url": "https://www.gzzrsks.com.cn/newsDetail/30091.html"
     },
     {
@@ -24,9 +23,8 @@
       "pay_start": "",
       "pay_end": "",
       "phase": "upcoming",
-      "remaining": 660,
+      "remaining": 600,
       "signup_url": "",
-      "info_url": "",
       "external_url": "https://mzj.cngy.gov.cn/new/show/91012bcb59204627bebf0bb9cc90a144.html"
     },
     {
@@ -40,7 +38,28 @@
       "phase": "upcoming",
       "remaining": 4320,
       "signup_url": "",
-      "info_url": "",
+      "external_url": "http://www.njpta.org.cn/"
+    }
+  ],
+  "closed": [
+    {
+      "name": "通江县2026年公开招募增量政策性岗位工作人员",
+      "external_url": "https://www.tjxzf.gov.cn/content/article/14072857?shareKey=f4dd9dbdec194b0e9055990091462eff"
+    },
+    {
+      "name": "会东县2026年公开考试招聘编外小学英语教师",
+      "external_url": "https://mp.weixin.qq.com/s/D9uNxYOs-UUsLAAGwtydOA"
+    },
+    {
+      "name": "达州市2026年养老服务管理专员政策性岗位公开招募",
+      "external_url": "http://www.dzrsks.com.cn/"
+    },
+    {
+      "name": "绵阳市2026年增量政策性岗位招募",
+      "external_url": "http://www.myrsks.com.cn/newsDetail/13472.html"
+    },
+    {
+      "name": "内江市市中区2026年公开招聘新兴领域党建工作专员",
       "external_url": "http://www.njpta.org.cn/"
     }
   ]
