@@ -207,26 +207,26 @@ def build_daily_report(curr_active, curr_closed, prev_state, cfg):
 
         # 确定标签
         if is_first or key not in prev_entries:
-            tag = "[新增]"
+            tag = "🆕"
             new_count += 1
         elif prev["phase"] == "upcoming" and e["phase"] == "ongoing":
-            tag = "[报名开始]"
+            tag = "▶️ 报名开始"
             changed_count += 1
         else:
             tag = ""
 
         # 状态描述
         if e["phase"] == "upcoming":
-            status = f"距开始 {_fmt_time(e['remaining'])}"
+            status = f"⏳ 距开始 {_fmt_time(e['remaining'])}"
         else:
-            status = f"报名中, 距结束 {_fmt_time(e['remaining'])}"
+            status = f"🔴 报名中 · 距结束 {_fmt_time(e['remaining'])}"
 
-        line = f"{tag}[{e['area']}] {e['name']}"
+        line = f"{tag}【{e['area']}】{e['name']}"
         if tag:
             line += f"\n    {status}"
-        line += f"\n    报名: {e['start']} ~ {e['end']}"
+        line += f"\n    📅 {e['start']} ~ {e['end']}"
         if e["pay_start"]:
-            line += f"  |  缴费: {e['pay_start']} ~ {e['pay_end']}"
+            line += f"  |  💰 缴费 {e['pay_start']} ~ {e['pay_end']}"
         lines.append((e, line, tag))
 
         # 即将结束提醒
@@ -243,52 +243,52 @@ def build_daily_report(curr_active, curr_closed, prev_state, cfg):
             continue
         if key not in curr_keys:
             if p["name"] in curr_closed_names:
-                removed.append(f"[已结束] [{p['area']}] {p['name']}")
+                removed.append(f"🔚 已结束：【{p['area']}】{p['name']}")
             else:
-                removed.append(f"[已下线] [{p['area']}] {p['name']}")
+                removed.append(f"❌ 已下线：【{p['area']}】{p['name']}")
 
     # 组装消息
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
-    msg_lines = [f"考生之家报名日报", f"更新时间: {now}", ""]
+    msg_lines = [f"📋 考生之家报名日报", f"更新时间：{now}", ""]
 
     # 统计摘要
-    msg_lines.append(f"当前共 {len(lines)} 个项目")
+    msg_lines.append(f"📊 当前共 {len(lines)} 个项目")
     if new_count:
-        msg_lines.append(f"  新增 {new_count} 个")
+        msg_lines.append(f"   🆕 新增 {new_count} 个")
     if changed_count:
-        msg_lines.append(f"  状态变化 {changed_count} 个")
+        msg_lines.append(f"   ▶️ 状态变化 {changed_count} 个")
     if removed:
-        msg_lines.append(f"  已结束/下线 {len(removed)} 个")
+        msg_lines.append(f"   🔚 已结束/下线 {len(removed)} 个")
     msg_lines.append("")
 
     # 项目列表
-    msg_lines.append("---")
+    msg_lines.append("━" * 20)
     for e, line, tag in lines:
         msg_lines.append(line)
         msg_lines.append("")
 
     # 即将结束提醒
     if ending_soon:
-        msg_lines.append("---")
-        msg_lines.append("!! 即将截止:")
+        msg_lines.append("━" * 20)
+        msg_lines.append("⚠️ 即将截止：")
         for e in ending_soon:
-            msg_lines.append(f"   [{e['area']}] {e['name']} - 还剩{_fmt_time(e['remaining'])}")
+            msg_lines.append(f"   【{e['area']}】{e['name']} — 还剩 {_fmt_time(e['remaining'])}")
 
     # 已下线
     if removed:
-        msg_lines.append("---")
+        msg_lines.append("━" * 20)
         for r in removed:
             msg_lines.append(r)
 
     # 已结束列表
     if curr_closed:
-        msg_lines.append("---")
-        msg_lines.append("近期已结束的报名:")
+        msg_lines.append("━" * 20)
+        msg_lines.append("📁 近期已结束的报名：")
         for c in curr_closed[:5]:
-            msg_lines.append(f"   * {c['name']}")
+            msg_lines.append(f"   · {c['name']}")
 
     msg_lines.append("")
-    msg_lines.append("litrash/bm-monitor")
+    msg_lines.append("— 考生之家监控 | litrash/bm-monitor")
 
     return "\n".join(msg_lines), bool(new_count or changed_count or removed or ending_soon)
 
