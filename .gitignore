@@ -1,0 +1,6 @@
+*.log
+*.pyc
+__pycache__/
+# config.json 是模板不含密钥，提交到仓库；本地修改用 git update-index --skip-worktree
+.venv/
+.vscode/

@@ -1,0 +1,31 @@
+{
+  "url": "https://bm.e21cn.com/",
+  "interval_minutes": 15,
+  "state_file": "bm_monitor_state.json",
+  "log_file": "bm_monitor.log",
+  "alert_when_ending_within_hours": 2,
+
+  "keyword_filter": [],
+  "area_filter": [],
+
+  "notify": {
+    "windows_toast": true,
+
+    "serverchan": {
+      "enabled": false,
+      "sendkey": "",
+      "send_url": "https://sctapi.ftqq.com/SCTKEY.send"
+    },
+
+    "email": {
+      "enabled": false,
+      "smtp_host": "smtp.qq.com",
+      "smtp_port": 465,
+      "use_ssl": true,
+      "username": "",
+      "password": "",
+      "from": "you@qq.com",
+      "to": "you@qq.com"
+    }
+  }
+}

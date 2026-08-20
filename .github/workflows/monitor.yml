@@ -1,0 +1,60 @@
+name: 考生之家报名监控
+
+on:
+  schedule:
+    # 北京时间 8:00-22:00 每 2 小时运行一次 (UTC+8 -> UTC)
+    # 实际 Cron 用 UTC 时间: 0,2,4,6,8,10,12,14 = 北京 8,10,12,14,16,18,20,22 点
+    - cron: '0 0,2,4,6,8,10,12,14 * * *'
+  # 支持手动触发
+  workflow_dispatch:
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout 仓库
+        uses: actions/checkout@v4
+
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 安装依赖
+        run: pip install -r requirements.txt
+
+      - name: 运行监控
+        env:
+          CI: 'true'
+          # Server酱 (微信推送) — 在 GitHub Settings > Secrets 里配置
+          BM_SC_SENDKEY: ${{ secrets.BM_SC_SENDKEY }}
+          # Telegram (可选, 备用)
+          BM_TG_BOT_TOKEN: ${{ secrets.BM_TG_BOT_TOKEN }}
+          BM_TG_CHAT_ID: ${{ secrets.BM_TG_CHAT_ID }}
+          # 邮件 (可选, 备用)
+          BM_EMAIL_HOST: ${{ secrets.BM_EMAIL_HOST }}
+          BM_EMAIL_PORT: ${{ secrets.BM_EMAIL_PORT }}
+          BM_EMAIL_USER: ${{ secrets.BM_EMAIL_USER }}
+          BM_EMAIL_PASS: ${{ secrets.BM_EMAIL_PASS }}
+          BM_EMAIL_FROM: ${{ secrets.BM_EMAIL_FROM }}
+          BM_EMAIL_TO: ${{ secrets.BM_EMAIL_TO }}
+          # 过滤条件 (可选)
+          BM_KEYWORDS: ${{ secrets.BM_KEYWORDS }}
+          BM_AREAS: ${{ secrets.BM_AREAS }}
+          BM_ENDING_HOURS: ${{ secrets.BM_ENDING_HOURS }}
+        run: python bm_monitor.py --once
+
+      - name: 提交状态更新
+        # 仅当状态文件有变化时才提交, 否则跳过
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add bm_monitor_state.json
+          if git diff --cached --quiet; then
+            echo "状态无变化, 跳过提交"
+          else
+            git commit -m "chore: 更新监控状态 [skip ci]"
+            git push
+          fi
