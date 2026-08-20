@@ -207,26 +207,26 @@ def build_daily_report(curr_active, curr_closed, prev_state, cfg):
 
         # 确定标签
         if is_first or key not in prev_entries:
-            tag = "🆕"
+            tag = "[新增]"
             new_count += 1
         elif prev["phase"] == "upcoming" and e["phase"] == "ongoing":
-            tag = "▶️ 报名开始"
+            tag = "[报名开始]"
             changed_count += 1
         else:
             tag = ""
 
         # 状态描述
         if e["phase"] == "upcoming":
-            status = f"⏳ 距开始 {_fmt_time(e['remaining'])}"
+            status = f"距开始 {_fmt_time(e['remaining'])}"
         else:
-            status = f"🔴 报名中 · 距结束 {_fmt_time(e['remaining'])}"
+            status = f"报名中, 距结束 {_fmt_time(e['remaining'])}"
 
-        line = f"{tag}【{e['area']}】{e['name']}"
+        line = f"{tag}[{e['area']}] {e['name']}"
         if tag:
             line += f"\n    {status}"
-        line += f"\n    📅 {e['start']} ~ {e['end']}"
+        line += f"\n    报名: {e['start']} ~ {e['end']}"
         if e["pay_start"]:
-            line += f"  |  💰 缴费 {e['pay_start']} ~ {e['pay_end']}"
+            line += f"  |  缴费: {e['pay_start']} ~ {e['pay_end']}"
         lines.append((e, line, tag))
 
         # 即将结束提醒
@@ -243,52 +243,52 @@ def build_daily_report(curr_active, curr_closed, prev_state, cfg):
             continue
         if key not in curr_keys:
             if p["name"] in curr_closed_names:
-                removed.append(f"🔚 已结束：【{p['area']}】{p['name']}")
+                removed.append(f"[已结束] [{p['area']}] {p['name']}")
             else:
-                removed.append(f"❌ 已下线：【{p['area']}】{p['name']}")
+                removed.append(f"[已下线] [{p['area']}] {p['name']}")
 
     # 组装消息
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
-    msg_lines = [f"📋 考生之家报名日报", f"更新时间：{now}", ""]
+    msg_lines = [f"考生之家报名日报", f"更新时间: {now}", ""]
 
     # 统计摘要
-    msg_lines.append(f"📊 当前共 {len(lines)} 个项目")
+    msg_lines.append(f"当前共 {len(lines)} 个项目")
     if new_count:
-        msg_lines.append(f"   🆕 新增 {new_count} 个")
+        msg_lines.append(f"  新增 {new_count} 个")
     if changed_count:
-        msg_lines.append(f"   ▶️ 状态变化 {changed_count} 个")
+        msg_lines.append(f"  状态变化 {changed_count} 个")
     if removed:
-        msg_lines.append(f"   🔚 已结束/下线 {len(removed)} 个")
+        msg_lines.append(f"  已结束/下线 {len(removed)} 个")
     msg_lines.append("")
 
     # 项目列表
-    msg_lines.append("━" * 20)
+    msg_lines.append("---")
     for e, line, tag in lines:
         msg_lines.append(line)
         msg_lines.append("")
 
     # 即将结束提醒
     if ending_soon:
-        msg_lines.append("━" * 20)
-        msg_lines.append("⚠️ 即将截止：")
+        msg_lines.append("---")
+        msg_lines.append("!! 即将截止:")
         for e in ending_soon:
-            msg_lines.append(f"   【{e['area']}】{e['name']} — 还剩 {_fmt_time(e['remaining'])}")
+            msg_lines.append(f"   [{e['area']}] {e['name']} - 还剩{_fmt_time(e['remaining'])}")
 
     # 已下线
     if removed:
-        msg_lines.append("━" * 20)
+        msg_lines.append("---")
         for r in removed:
             msg_lines.append(r)
 
     # 已结束列表
     if curr_closed:
-        msg_lines.append("━" * 20)
-        msg_lines.append("📁 近期已结束的报名：")
+        msg_lines.append("---")
+        msg_lines.append("近期已结束的报名:")
         for c in curr_closed[:5]:
-            msg_lines.append(f"   · {c['name']}")
+            msg_lines.append(f"   * {c['name']}")
 
     msg_lines.append("")
-    msg_lines.append("— 考生之家监控 | litrash/bm-monitor")
+    msg_lines.append("litrash/bm-monitor")
 
     return "\n".join(msg_lines), bool(new_count or changed_count or removed or ending_soon)
 
@@ -317,12 +317,14 @@ def send_telegram(token, chat_id, title, msg):
     if not token or not chat_id:
         return False
     try:
-        text = f"*{title}*\n\n{msg}"
+        # 用 HTML 模式避免 Markdown 特殊字符问题
+        text = f"<b>{title}</b>\n\n{msg}"
         url = f"https://api.telegram.org/bot{token}/sendMessage"
-        r = requests.post(url, json={"chat_id": chat_id, "text": text, "parse_mode": "Markdown"}, timeout=15)
+        r = requests.post(url, json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"}, timeout=15)
         if r.json().get("ok"):
             log.info("Telegram 推送成功")
             return True
+        log.warning("Telegram 返回: %s", r.json())
         return False
     except Exception as e:
         log.warning("Telegram 发送失败: %s", e)
@@ -362,19 +364,20 @@ def run_once(cfg, force_send=False):
 
     is_first = not prev_state.get("entries")
 
+    title = "考生之家报名日报"
+    if has_changes:
+        title += " [有变化]"
+
+    # Telegram 每次都推送（主通道）
+    send_telegram(cfg["tg_bot_token"], cfg["tg_chat_id"], title, report)
+
     if is_first:
         log.info("首次运行，建立基线")
-        send_serverchan(cfg["sc_sendkey"],
-                        "📋 考生之家 - 首次基线建立",
-                        report.replace("报名日报", "首次基线").replace("🆕", ""))
     elif has_changes or force_send:
-        title = "📋 考生之家报名日报"
-        if has_changes:
-            title += " ⚡有变化"
+        # Server酱作为备用
         send_serverchan(cfg["sc_sendkey"], title, report)
-        send_telegram(cfg["tg_bot_token"], cfg["tg_chat_id"], title, report)
     else:
-        log.info("无变化，跳过推送")
+        log.info("无变化，已通过 Telegram 推送日报")
 
     log.info("\n%s", report)
     return active, closed
