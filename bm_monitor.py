@@ -2,53 +2,25 @@
 """
 考生之家(bm.e21cn.com) 报名信息监控程序
 
-功能:
-  * 定时抓取首页 HTML, 解析"正在进行/即将开始"与"已结束"的报名项目
-  * 检测变化: 新增报名、报名开始(未开始->报名中)、报名即将结束、报名结束/下线
-  * 多通道通知: Windows 桌面弹窗 / Server酱(微信) / 邮件 / Telegram Bot
-  * 首次运行记录基线, 不触发通知; 之后每次运行对比上一份快照
-  * 支持本地常驻与 GitHub Actions 定时运行
+每天定时抓取首页，把所有报名项目推送到微信，并标注哪些是新增、状态变化、即将结束。
 
 用法:
-  python bm_monitor.py              # 按配置的间隔循环监控
-  python bm_monitor.py --once       # 只抓取一次(测试解析/基线)
-  python bm_monitor.py --test-notify # 测试通知通道
-  python bm_monitor.py --config path/to/config.json
-
-环境变量覆盖 (GitHub Actions 等 CI 场景):
-  BM_URL          - 监控 URL
-  BM_KEYWORDS     - 逗号分隔的关键词过滤
-  BM_AREAS        - 逗号分隔的地区过滤
-  BM_ENDING_HOURS - 即将结束提醒阈值(小时)
-  BM_SC_SENDKEY   - Server酱 SendKey
-  BM_TG_BOT_TOKEN - Telegram Bot Token
-  BM_TG_CHAT_ID   - Telegram Chat ID
-  BM_EMAIL_HOST   - SMTP 服务器
-  BM_EMAIL_PORT   - SMTP 端口
-  BM_EMAIL_USER   - SMTP 用户名
-  BM_EMAIL_PASS   - SMTP 密码
-  BM_EMAIL_FROM   - 发件人
-  BM_EMAIL_TO     - 收件人
+  python bm_monitor.py              # 本地循环监控
+  python bm_monitor.py --once       # 只抓取一次
+  python bm_monitor.py --test-notify # 测试推送
 """
 
 import argparse
 import json
 import logging
 import os
-import smtplib
-import subprocess
 import sys
-import tempfile
 import time
 from datetime import datetime
-from email.header import Header
-from email.mime.text import MIMEText
-from email.utils import formataddr
 
 import requests
 from bs4 import BeautifulSoup
 
-DEFAULT_CONFIG = "config.json"
 DEFAULT_STATE = "bm_monitor_state.json"
 DEFAULT_LOG = "bm_monitor.log"
 
@@ -56,87 +28,28 @@ UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/120.0 Safari/537.36")
 
 log = logging.getLogger("bm_monitor")
-
-# 是否在 CI 环境 (GitHub Actions / 无桌面)
 IS_CI = os.environ.get("CI") == "true" or os.environ.get("GITHUB_ACTIONS") == "true"
 
 
 # --------------------------------------------------------------------------- #
-# 配置加载
+# 配置
 # --------------------------------------------------------------------------- #
-def _env(varname, default=""):
-    val = os.environ.get(varname, "")
-    return val if val else default
+def _env(v):
+    return os.environ.get(v, "")
 
 
-def _env_list(varname):
-    val = os.environ.get(varname, "")
-    return [x.strip() for x in val.split(",") if x.strip()]
-
-
-def load_config(path):
-    """加载 JSON 配置 + 环境变量覆盖。"""
-    defaults = {
-        "url": "https://bm.e21cn.com/",
-        "interval_minutes": 15,
+def load_config():
+    cfg = {
+        "url": _env("BM_URL") or "https://bm.e21cn.com/",
         "state_file": DEFAULT_STATE,
         "log_file": DEFAULT_LOG,
-        "alert_when_ending_within_hours": 2,
-        "keyword_filter": [],
-        "area_filter": [],
-        "notify": {
-            "windows_toast": not IS_CI,
-            "serverchan": {"enabled": False, "sendkey": ""},
-            "telegram": {"enabled": False, "bot_token": "", "chat_id": ""},
-            "email": {
-                "enabled": False, "smtp_host": "", "smtp_port": 465,
-                "use_ssl": True, "username": "", "password": "",
-                "from": "", "to": "",
-            },
-        },
+        "alert_when_ending_within_hours": int(_env("BM_ENDING_HOURS") or "2"),
+        "keyword_filter": [x.strip() for x in _env("BM_KEYWORDS").split(",") if x.strip()],
+        "area_filter": [x.strip() for x in _env("BM_AREAS").split(",") if x.strip()],
+        "sc_sendkey": _env("BM_SC_SENDKEY"),
+        "tg_bot_token": _env("BM_TG_BOT_TOKEN"),
+        "tg_chat_id": _env("BM_TG_CHAT_ID"),
     }
-    cfg = dict(defaults)
-    if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
-            user = json.load(f)
-        cfg.update(user)
-        for k, v in defaults["notify"].items():
-            if isinstance(v, dict) and isinstance(cfg["notify"].get(k), dict):
-                merged = dict(v)
-                merged.update(cfg["notify"][k])
-                cfg["notify"][k] = merged
-
-    # ---- 环境变量覆盖 ----
-    if _env("BM_URL"):
-        cfg["url"] = _env("BM_URL")
-    if _env("BM_KEYWORDS"):
-        cfg["keyword_filter"] = _env_list("BM_KEYWORDS")
-    if _env("BM_AREAS"):
-        cfg["area_filter"] = _env_list("BM_AREAS")
-    if _env("BM_ENDING_HOURS"):
-        cfg["alert_when_ending_within_hours"] = int(_env("BM_ENDING_HOURS"))
-
-    # Server酱
-    if _env("BM_SC_SENDKEY"):
-        cfg["notify"]["serverchan"]["enabled"] = True
-        cfg["notify"]["serverchan"]["sendkey"] = _env("BM_SC_SENDKEY")
-
-    # Telegram
-    if _env("BM_TG_BOT_TOKEN"):
-        cfg["notify"]["telegram"]["enabled"] = True
-        cfg["notify"]["telegram"]["bot_token"] = _env("BM_TG_BOT_TOKEN")
-        cfg["notify"]["telegram"]["chat_id"] = _env("BM_TG_CHAT_ID")
-
-    # Email
-    if _env("BM_EMAIL_HOST"):
-        cfg["notify"]["email"]["enabled"] = True
-        cfg["notify"]["email"]["smtp_host"] = _env("BM_EMAIL_HOST")
-        cfg["notify"]["email"]["smtp_port"] = int(_env("BM_EMAIL_PORT", "465"))
-        cfg["notify"]["email"]["username"] = _env("BM_EMAIL_USER")
-        cfg["notify"]["email"]["password"] = _env("BM_EMAIL_PASS")
-        cfg["notify"]["email"]["from"] = _env("BM_EMAIL_FROM")
-        cfg["notify"]["email"]["to"] = _env("BM_EMAIL_TO")
-
     return cfg
 
 
@@ -155,7 +68,6 @@ def _clean(s):
 
 
 def _parse_remaining(s):
-    """'2小时'/'17小时'/'3天'/'30分钟' -> 分钟数(int); 无法解析返回 None。"""
     s = _clean(s)
     units = {"天": 24 * 60, "小时": 60, "分钟": 1, "分": 1}
     for unit, mul in units.items():
@@ -169,17 +81,14 @@ def _parse_remaining(s):
 
 
 def parse_entries(html):
-    """解析首页, 返回 (active_entries, closed_entries)。"""
     soup = BeautifulSoup(html, "lxml")
     active, closed = [], []
 
-    # ---- 正在进行及7天内即将开始 ----
     for li in soup.select("#div_EntryLists li.li_arealists"):
         name_el = li.select_one("label.area_lists_entryname a")
         time_el = li.select_one("label.area_lists_entrytime")
         date_el = li.select_one("label.area_lists_entrydate")
         pay_el = li.select_one("label.area_lists_paydate")
-
         if not name_el:
             continue
         name = _clean(name_el.get_text())
@@ -187,7 +96,7 @@ def parse_entries(html):
 
         area = ""
         parent_ul = li.find_parent("ul")
-        if parent_ul is not None:
+        if parent_ul:
             prev = parent_ul.find_previous_sibling("ul")
             if prev and prev.get("id"):
                 area = _clean(prev["id"])
@@ -214,13 +123,11 @@ def parse_entries(html):
             if len(bs) >= 2:
                 remaining = _parse_remaining(bs[1].get_text())
 
-        signup_url = info_url = ""
+        signup_url = ""
         for a in li.select("a"):
             href = a.get("href", "")
             if "checkRE" in href or "去报名" in a.get_text():
                 signup_url = href
-            if "user" in href and "打印" in a.get_text():
-                info_url = href
 
         key = f"{area}|{name}|{start}|{end}"
         active.append({
@@ -228,23 +135,20 @@ def parse_entries(html):
             "start": start, "end": end,
             "pay_start": pay_start, "pay_end": pay_end,
             "phase": phase, "remaining": remaining,
-            "signup_url": signup_url, "info_url": info_url,
-            "external_url": external_url,
+            "signup_url": signup_url, "external_url": external_url,
         })
 
-    # ---- 近期已结束 ----
     for li in soup.select("#div_EntryLists_Closed li.li_Closed"):
         a = li.select_one("a")
         if not a:
             continue
-        name = _clean(a.get_text())
-        closed.append({"name": name, "external_url": a.get("href", "")})
+        closed.append({"name": _clean(a.get_text()), "external_url": a.get("href", "")})
 
     return active, closed
 
 
 # --------------------------------------------------------------------------- #
-# 变化检测
+# 过滤
 # --------------------------------------------------------------------------- #
 def filter_entry(e, cfg):
     kws = cfg.get("keyword_filter") or []
@@ -256,193 +160,166 @@ def filter_entry(e, cfg):
     return True
 
 
-def diff(prev_active, curr_active, curr_closed, cfg):
-    """对比上一份快照, 返回事件消息列表。"""
-    events = []
-    prev = {e["key"]: e for e in prev_active}
-    curr = {e["key"]: e for e in curr_active}
-    closed_names = {c["name"] for c in curr_closed}
+# --------------------------------------------------------------------------- #
+# 构建日报消息
+# --------------------------------------------------------------------------- #
+def _fmt_time(remaining):
+    """分钟数 -> 可读字符串"""
+    if remaining is None:
+        return "?"
+    if remaining < 60:
+        return f"{remaining}分钟"
+    if remaining < 24 * 60:
+        h = remaining // 60
+        m = remaining % 60
+        return f"{h}小时{m}分钟" if m else f"{h}小时"
+    d = remaining // (24 * 60)
+    h = (remaining % (24 * 60)) // 60
+    return f"{d}天{h}小时" if h else f"{d}天"
 
-    for key, e in curr.items():
+
+def build_daily_report(curr_active, curr_closed, prev_state, cfg):
+    """生成每日推送消息，标注变化。"""
+    prev_entries = {e["key"]: e for e in prev_state.get("entries", [])}
+    prev_closed_names = {c["name"] for c in prev_state.get("closed", [])}
+    curr_keys = {e["key"] for e in curr_active}
+    curr_closed_names = {c["name"] for c in curr_closed}
+
+    is_first = not prev_entries
+    lines = []
+    ending_soon = []
+    new_count = 0
+    changed_count = 0
+
+    # 分类每个当前条目
+    for e in curr_active:
         if not filter_entry(e, cfg):
             continue
-        if key not in prev:
-            events.append(f"[新增] {e['area']} - {e['name']} "
-                          f"(报名 {e['start']} ~ {e['end']})")
-            if e["phase"] == "ongoing" and e["remaining"] is not None:
-                events.append(f"    ↳ 该报名已开始, 距结束约 {e['remaining']} 分钟")
+        key = e["key"]
+        prev = prev_entries.get(key)
 
-    for key, e in curr.items():
-        if key not in prev or not filter_entry(e, cfg):
-            continue
-        p = prev[key]
-        if p["phase"] == "upcoming" and e["phase"] == "ongoing":
-            events.append(f"[报名开始] {e['area']} - {e['name']} "
-                          f"(截止 {e['end']})")
-
-    for key, p in prev.items():
-        if key in curr or not filter_entry(p, cfg):
-            continue
-        if p["name"] in closed_names:
-            events.append(f"[报名结束] {p['area']} - {p['name']}")
+        # 确定标签
+        if is_first or key not in prev_entries:
+            tag = "🆕"
+            new_count += 1
+        elif prev["phase"] == "upcoming" and e["phase"] == "ongoing":
+            tag = "▶️ 报名开始"
+            changed_count += 1
         else:
-            events.append(f"[下线] {p['area']} - {p['name']}")
+            tag = ""
 
-    thresh = cfg.get("alert_when_ending_within_hours", 2)
-    if thresh and thresh > 0:
-        limit = int(thresh * 60)
-        for e in curr.values():
-            if not filter_entry(e, cfg):
-                continue
-            if e["phase"] == "ongoing" and e["remaining"] is not None \
-                    and e["remaining"] <= limit:
-                p = prev.get(e["key"])
-                was_below = p and p.get("remaining") is not None \
-                    and p["remaining"] <= limit
-                if not was_below:
-                    events.append(f"[即将结束] {e['area']} - {e['name']} "
-                                  f"距报名结束约 {e['remaining']} 分钟")
+        # 状态描述
+        if e["phase"] == "upcoming":
+            status = f"⏳ 距开始 {_fmt_time(e['remaining'])}"
+        else:
+            status = f"🔴 报名中 · 距结束 {_fmt_time(e['remaining'])}"
 
-    return events
+        line = f"{tag}【{e['area']}】{e['name']}"
+        if tag:
+            line += f"\n    {status}"
+        line += f"\n    📅 {e['start']} ~ {e['end']}"
+        if e["pay_start"]:
+            line += f"  |  💰 缴费 {e['pay_start']} ~ {e['pay_end']}"
+        lines.append((e, line, tag))
+
+        # 即将结束提醒
+        thresh = int(cfg.get("alert_when_ending_within_hours", 2) or 0) * 60
+        if thresh and e["phase"] == "ongoing" and e["remaining"] and e["remaining"] <= thresh:
+            prev_rem = prev.get("remaining") if prev else None
+            if not prev_rem or prev_rem > thresh:
+                ending_soon.append(e)
+
+    # 检测已下线的
+    removed = []
+    for key, p in prev_entries.items():
+        if not filter_entry(p, cfg):
+            continue
+        if key not in curr_keys:
+            if p["name"] in curr_closed_names:
+                removed.append(f"🔚 已结束：【{p['area']}】{p['name']}")
+            else:
+                removed.append(f"❌ 已下线：【{p['area']}】{p['name']}")
+
+    # 组装消息
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    msg_lines = [f"📋 考生之家报名日报", f"更新时间：{now}", ""]
+
+    # 统计摘要
+    msg_lines.append(f"📊 当前共 {len(lines)} 个项目")
+    if new_count:
+        msg_lines.append(f"   🆕 新增 {new_count} 个")
+    if changed_count:
+        msg_lines.append(f"   ▶️ 状态变化 {changed_count} 个")
+    if removed:
+        msg_lines.append(f"   🔚 已结束/下线 {len(removed)} 个")
+    msg_lines.append("")
+
+    # 项目列表
+    msg_lines.append("━" * 20)
+    for e, line, tag in lines:
+        msg_lines.append(line)
+        msg_lines.append("")
+
+    # 即将结束提醒
+    if ending_soon:
+        msg_lines.append("━" * 20)
+        msg_lines.append("⚠️ 即将截止：")
+        for e in ending_soon:
+            msg_lines.append(f"   【{e['area']}】{e['name']} — 还剩 {_fmt_time(e['remaining'])}")
+
+    # 已下线
+    if removed:
+        msg_lines.append("━" * 20)
+        for r in removed:
+            msg_lines.append(r)
+
+    # 已结束列表
+    if curr_closed:
+        msg_lines.append("━" * 20)
+        msg_lines.append("📁 近期已结束的报名：")
+        for c in curr_closed[:5]:
+            msg_lines.append(f"   · {c['name']}")
+
+    msg_lines.append("")
+    msg_lines.append("— 考生之家监控 | litrash/bm-monitor")
+
+    return "\n".join(msg_lines), bool(new_count or changed_count or removed or ending_soon)
 
 
 # --------------------------------------------------------------------------- #
-# 通知通道
+# 推送
 # --------------------------------------------------------------------------- #
-def _ps_escape(s):
-    return (s or "").replace("'", "''")
-
-
-def send_windows_toast(title, msg):
-    """Windows 原生 Toast, 失败回退到托盘气泡。"""
-    if IS_CI:
-        return
-    ps = r'''
-$ErrorActionPreference = 'SilentlyContinue'
-try {
-    [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null
-    $template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
-    $nodes = $template.GetElementsByTagName('text')
-    $nodes.Item(0).AppendChild($template.CreateTextNode('__TITLE__')) > $null
-    $nodes.Item(1).AppendChild($template.CreateTextNode('__MSG__')) > $null
-    $toast = [Windows.UI.Notifications.ToastNotification]::new($template)
-    [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('考生之家监控').Show($toast)
-} catch {
-    Add-Type -AssemblyName System.Windows.Forms
-    $n = New-Object System.Windows.Forms.NotifyIcon
-    $n.Icon = [System.Drawing.SystemIcons]::Information
-    $n.Visible = $true
-    $n.ShowBalloonTip(10000, '__TITLE__', '__MSG__', [System.Windows.Forms.ToolTipIcon]::Info)
-    Start-Sleep -Seconds 11
-    $n.Visible = $false
-}
-'''
-    ps = ps.replace("__TITLE__", _ps_escape(title)).replace("__MSG__", _ps_escape(msg))
-    try:
-        with tempfile.NamedTemporaryFile("w", suffix=".ps1",
-                                         encoding="utf-8-sig",
-                                         delete=False) as f:
-            f.write(ps)
-            tmp = f.name
-        subprocess.run(
-            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
-             "-File", tmp],
-            capture_output=True, timeout=30,
-            creationflags=0x08000000 if sys.platform == "win32" else 0,
-        )
-    except Exception as e:
-        log.warning("Windows 弹窗发送失败: %s", e)
-    finally:
-        try:
-            os.remove(tmp)
-        except Exception:
-            pass
-
-
-def send_serverchan(cfg, title, msg):
-    sc = cfg["notify"]["serverchan"]
-    key = sc.get("sendkey", "").strip()
-    if not key:
-        log.warning("Server酱未配置 sendkey")
+def send_serverchan(sendkey, title, msg):
+    if not sendkey:
         return False
-    url = sc.get("send_url") or f"https://sctapi.ftqq.com/{key}.send"
     try:
-        r = requests.post(url, data={"title": title[:32], "desp": msg}, timeout=15)
+        url = f"https://sctapi.ftqq.com/{sendkey}.send"
+        r = requests.post(url, data={"title": title, "desp": msg}, timeout=15)
         data = r.json()
         if data.get("code") == 0:
             log.info("Server酱推送成功")
             return True
-        log.warning("Server酱返回异常: %s", data)
+        log.warning("Server酱返回: %s", data)
         return False
     except Exception as e:
         log.warning("Server酱发送失败: %s", e)
         return False
 
 
-def send_telegram(cfg, title, msg):
-    tg = cfg["notify"]["telegram"]
-    token = tg.get("bot_token", "").strip()
-    chat_id = tg.get("chat_id", "").strip()
+def send_telegram(token, chat_id, title, msg):
     if not token or not chat_id:
-        log.warning("Telegram 未配置")
         return False
     try:
         text = f"*{title}*\n\n{msg}"
         url = f"https://api.telegram.org/bot{token}/sendMessage"
-        r = requests.post(url, json={
-            "chat_id": chat_id, "text": text, "parse_mode": "Markdown"
-        }, timeout=15)
+        r = requests.post(url, json={"chat_id": chat_id, "text": text, "parse_mode": "Markdown"}, timeout=15)
         if r.json().get("ok"):
             log.info("Telegram 推送成功")
             return True
-        log.warning("Telegram 返回异常: %s", r.json())
         return False
     except Exception as e:
         log.warning("Telegram 发送失败: %s", e)
         return False
-
-
-def send_email(cfg, title, msg):
-    em = cfg["notify"]["email"]
-    if not em.get("smtp_host") or not em.get("to"):
-        log.warning("邮件未配置 smtp_host / to")
-        return False
-    try:
-        mime = MIMEText(msg, "plain", "utf-8")
-        mime["Subject"] = Header(title, "utf-8")
-        mime["From"] = formataddr((str(Header("考生之家监控", "utf-8")), em.get("from")))
-        mime["To"] = em.get("to")
-
-        host, port = em["smtp_host"], int(em.get("smtp_port", 465))
-        if em.get("use_ssl", True):
-            server = smtplib.SMTP_SSL(host, port, timeout=20)
-        else:
-            server = smtplib.SMTP(host, port, timeout=20)
-            server.starttls()
-        if em.get("username"):
-            server.login(em["username"], em.get("password", ""))
-        server.sendmail(em.get("from"), em.get("to").split(","), mime.as_string())
-        server.quit()
-        log.info("邮件发送成功")
-        return True
-    except Exception as e:
-        log.warning("邮件发送失败: %s", e)
-        return False
-
-
-def notify(cfg, title, msg):
-    n = cfg["notify"]
-    ok = False
-    if n.get("windows_toast") and not IS_CI:
-        send_windows_toast(title, msg)
-        ok = True
-    if n.get("serverchan", {}).get("enabled"):
-        ok = send_serverchan(cfg, title, msg) or ok
-    if n.get("telegram", {}).get("enabled"):
-        ok = send_telegram(cfg, title, msg) or ok
-    if n.get("email", {}).get("enabled"):
-        ok = send_email(cfg, title, msg) or ok
-    return ok
 
 
 # --------------------------------------------------------------------------- #
@@ -450,100 +327,102 @@ def notify(cfg, title, msg):
 # --------------------------------------------------------------------------- #
 def load_state(path):
     if os.path.exists(path):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except (json.JSONDecodeError, OSError):
-            log.warning("状态文件损坏, 重新建立基线")
-    return {"entries": []}
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {"entries": [], "closed": []}
 
 
-def save_state(path, active):
+def save_state(path, active, closed):
     with open(path, "w", encoding="utf-8") as f:
-        json.dump({"updated_at": datetime.now().isoformat(timespec="seconds"),
-                   "entries": active}, f, ensure_ascii=False, indent=2)
+        json.dump({
+            "updated_at": datetime.now().isoformat(timespec="seconds"),
+            "entries": active,
+            "closed": closed,
+        }, f, ensure_ascii=False, indent=2)
 
 
 # --------------------------------------------------------------------------- #
 # 主流程
 # --------------------------------------------------------------------------- #
-def run_once(cfg, first_run=False):
+def run_once(cfg, force_send=False):
     html = fetch_html(cfg["url"])
     active, closed = parse_entries(html)
-    log.info("抓取到 %d 条进行中/即将开始, %d 条已结束",
-             len(active), len(closed))
+    log.info("抓取到 %d 条进行中/即将开始, %d 条已结束", len(active), len(closed))
 
-    state = load_state(cfg["state_file"])
-    events = diff(state.get("entries", []), active, closed, cfg)
-    save_state(cfg["state_file"], active)
+    prev_state = load_state(cfg["state_file"])
+    report, has_changes = build_daily_report(active, closed, prev_state, cfg)
+    save_state(cfg["state_file"], active, closed)
 
-    if first_run or state.get("entries") is None or not state.get("entries"):
-        log.info("首次运行, 已建立基线(%d 条), 不触发通知", len(active))
-        return active, closed, []
+    is_first = not prev_state.get("entries")
 
-    if events:
-        title = f"考生之家监控 - {len(events)} 条变化"
-        msg = "\n".join(events)
-        log.info("检测到变化:\n%s", msg)
-        notify(cfg, title, msg)
+    if is_first:
+        log.info("首次运行，建立基线")
+        send_serverchan(cfg["sc_sendkey"],
+                        "📋 考生之家 - 首次基线建立",
+                        report.replace("报名日报", "首次基线").replace("🆕", ""))
+    elif has_changes or force_send:
+        title = "📋 考生之家报名日报"
+        if has_changes:
+            title += " ⚡有变化"
+        send_serverchan(cfg["sc_sendkey"], title, report)
+        send_telegram(cfg["tg_bot_token"], cfg["tg_chat_id"], title, report)
     else:
-        log.info("无变化")
-    return active, closed, events
+        log.info("无变化，跳过推送")
+
+    log.info("\n%s", report)
+    return active, closed
 
 
 def main():
     ap = argparse.ArgumentParser(description="考生之家报名监控")
-    ap.add_argument("--config", default=DEFAULT_CONFIG, help="配置文件路径")
     ap.add_argument("--once", action="store_true", help="只运行一次")
-    ap.add_argument("--test-notify", action="store_true",
-                    help="测试通知通道后退出")
+    ap.add_argument("--force", action="store_true", help="强制发送推送")
+    ap.add_argument("--test-notify", action="store_true", help="测试推送")
     args = ap.parse_args()
 
-    cfg = load_config(args.config)
+    cfg = load_config()
 
-    for _stream in (sys.stdout, sys.stderr):
+    for s in (sys.stdout, sys.stderr):
         try:
-            _stream.reconfigure(encoding="utf-8")
+            s.reconfigure(encoding="utf-8")
         except Exception:
             pass
 
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",
-        handlers=[
-            logging.StreamHandler(sys.stdout),
-            logging.FileHandler(cfg["log_file"], encoding="utf-8"),
-        ],
+        handlers=[logging.StreamHandler(sys.stdout),
+                  logging.FileHandler(cfg["log_file"], encoding="utf-8")],
     )
 
     if args.test_notify:
-        log.info("测试通知通道...")
-        notify(cfg, "考生之家监控 - 测试",
-               "这是一条测试消息, 如果你看到它, 说明通知通道正常。")
-        log.info("测试完成")
+        log.info("测试推送...")
+        ok = send_serverchan(cfg["sc_sendkey"],
+                             "🧪 考生之家监控 - 测试",
+                             "推送通道正常！如果你看到这条消息，说明配置成功。\n\n— 考生之家监控 | litrash/bm-monitor")
+        log.info("测试%s", "完成" if ok else "失败")
         return
 
-    if args.once:
-        run_once(cfg)
+    if args.once or args.force:
+        run_once(cfg, force_send=args.force)
         return
 
-    interval = max(1, int(cfg.get("interval_minutes", 15)))
-    log.info("开始监控 %s, 每 %d 分钟检查一次 (Ctrl+C 退出)",
-             cfg["url"], interval)
+    # 本地循环模式
+    interval = max(1, int(cfg.get("interval_minutes", 15) or 15))
+    log.info("开始监控, 每 %d 分钟检查一次", interval)
     first = True
     while True:
         try:
-            run_once(cfg, first_run=first)
+            run_once(cfg, force_send=not first)
             first = False
         except KeyboardInterrupt:
             log.info("已退出")
             break
         except Exception as e:
-            log.error("本轮出错: %s", e, exc_info=True)
+            log.error("出错: %s", e, exc_info=True)
         try:
             time.sleep(interval * 60)
         except KeyboardInterrupt:
-            log.info("已退出")
             break
 
 
