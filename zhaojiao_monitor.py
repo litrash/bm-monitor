@@ -40,6 +40,17 @@ HEADERS = {
 log = logging.getLogger("zj_monitor")
 IS_CI = os.environ.get("CI") == "true" or os.environ.get("GITHUB_ACTIONS") == "true"
 
+
+# --------------------------------------------------------------------------- #
+# 代理支持
+# --------------------------------------------------------------------------- #
+def _get_proxy():
+    proxy_url = os.environ.get("HTTPS_PROXY") or os.environ.get("BM_PROXY") or ""
+    if proxy_url:
+        return {"http": proxy_url, "https": proxy_url}
+    return None
+
+
 # --------------------------------------------------------------------------- #
 # 配置
 # --------------------------------------------------------------------------- #
@@ -77,16 +88,16 @@ def _build_page_url(base_url, areaid, page_num):
 def fetch_page(base_url, areaid, page_num, retries=3):
     url = _build_page_url(base_url, areaid, page_num)
     session = requests.Session()
+    proxies = _get_proxy()
     last_error = None
     for i in range(retries):
         try:
             if i == 0:
-                # 首次先访问首页建立 session
                 try:
-                    session.get("https://www.zhaojiao.net/", headers=HEADERS, timeout=15)
+                    session.get("https://www.zhaojiao.net/", headers=HEADERS, timeout=15, proxies=proxies)
                 except Exception:
                     pass
-            r = session.get(url, headers=HEADERS, timeout=30)
+            r = session.get(url, headers=HEADERS, timeout=30, proxies=proxies)
             r.raise_for_status()
             r.encoding = "utf-8"
             return r.text

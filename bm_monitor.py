@@ -54,12 +54,24 @@ def load_config():
 
 
 # --------------------------------------------------------------------------- #
+# 代理支持
+# --------------------------------------------------------------------------- #
+def _get_proxy():
+    """从环境变量获取代理配置。用于海外环境访问中国网站。"""
+    proxy_url = os.environ.get("HTTPS_PROXY") or os.environ.get("BM_PROXY") or ""
+    if proxy_url:
+        return {"http": proxy_url, "https": proxy_url}
+    return None
+
+
+# --------------------------------------------------------------------------- #
 # 抓取与解析
 # --------------------------------------------------------------------------- #
 def fetch_html(url, retries=3):
+    proxies = _get_proxy()
     for i in range(retries):
         try:
-            r = requests.get(url, headers={"User-Agent": UA}, timeout=30)
+            r = requests.get(url, headers={"User-Agent": UA}, timeout=30, proxies=proxies)
             r.raise_for_status()
             r.encoding = r.apparent_encoding or "utf-8"
             return r.text
