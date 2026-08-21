@@ -51,7 +51,7 @@ jobs:
       - name: 运行统一监控
         env:
           CI: 'true'
-          HTTPS_PROXY: 'socks5h://127.0.0.1:1080'
+          BM_PROXY: 'socks5h://127.0.0.1:1080'
           BM_SC_SENDKEY: ${{ secrets.BM_SC_SENDKEY }}
           BM_TG_BOT_TOKEN: ${{ secrets.BM_TG_BOT_TOKEN }}
           BM_TG_CHAT_ID: ${{ secrets.BM_TG_CHAT_ID }}

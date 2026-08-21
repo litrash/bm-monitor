@@ -45,7 +45,7 @@ IS_CI = os.environ.get("CI") == "true" or os.environ.get("GITHUB_ACTIONS") == "t
 # 代理支持
 # --------------------------------------------------------------------------- #
 def _get_proxy():
-    proxy_url = os.environ.get("HTTPS_PROXY") or os.environ.get("BM_PROXY") or ""
+    proxy_url = os.environ.get("BM_PROXY") or ""
     if proxy_url:
         return {"http": proxy_url, "https": proxy_url}
     return None
@@ -89,15 +89,19 @@ def fetch_page(base_url, areaid, page_num, retries=3):
     url = _build_page_url(base_url, areaid, page_num)
     session = requests.Session()
     proxies = _get_proxy()
+    verify = not bool(proxies)  # 走代理时跳过 SSL 验证
+    import urllib3
+    if not verify:
+        urllib3.disable_warnings()
     last_error = None
     for i in range(retries):
         try:
             if i == 0:
                 try:
-                    session.get("https://www.zhaojiao.net/", headers=HEADERS, timeout=15, proxies=proxies)
+                    session.get("https://www.zhaojiao.net/", headers=HEADERS, timeout=15, proxies=proxies, verify=verify)
                 except Exception:
                     pass
-            r = session.get(url, headers=HEADERS, timeout=30, proxies=proxies)
+            r = session.get(url, headers=HEADERS, timeout=30, proxies=proxies, verify=verify)
             r.raise_for_status()
             r.encoding = "utf-8"
             return r.text

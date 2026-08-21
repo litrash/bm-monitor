@@ -58,7 +58,7 @@ def load_config():
 # --------------------------------------------------------------------------- #
 def _get_proxy():
     """从环境变量获取代理配置。用于海外环境访问中国网站。"""
-    proxy_url = os.environ.get("HTTPS_PROXY") or os.environ.get("BM_PROXY") or ""
+    proxy_url = os.environ.get("BM_PROXY") or ""
     if proxy_url:
         return {"http": proxy_url, "https": proxy_url}
     return None
@@ -69,9 +69,13 @@ def _get_proxy():
 # --------------------------------------------------------------------------- #
 def fetch_html(url, retries=3):
     proxies = _get_proxy()
+    verify = not bool(proxies)  # 走代理时跳过 SSL 验证（SS 隧道 TLS 可能有问题）
+    import urllib3
+    if not verify:
+        urllib3.disable_warnings()
     for i in range(retries):
         try:
-            r = requests.get(url, headers={"User-Agent": UA}, timeout=30, proxies=proxies)
+            r = requests.get(url, headers={"User-Agent": UA}, timeout=30, proxies=proxies, verify=verify)
             r.raise_for_status()
             r.encoding = r.apparent_encoding or "utf-8"
             return r.text
