@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-08-20T15:49:30",
+  "updated_at": "2026-08-21T02:24:50",
   "entries": [
     {
       "key": "甘孜藏族自治州|甘孜州2026年公开招募养老服务管理专员招募|2026年08月21日 09:00|2026年08月24日 18:00",
@@ -9,9 +9,9 @@
       "end": "2026年08月24日 18:00",
       "pay_start": "2026年08月21日 09:00",
       "pay_end": "2026年08月25日 17:30",
-      "phase": "upcoming",
-      "remaining": 540,
-      "signup_url": "",
+      "phase": "ongoing",
+      "remaining": 4320,
+      "signup_url": "checkRE/3740-79f1cec35c5c1e9eacb6ba164c13fc0b-",
       "external_url": "https://www.gzzrsks.com.cn/newsDetail/30091.html"
     },
     {
@@ -22,9 +22,9 @@
       "end": "2026年08月28日 08:00",
       "pay_start": "",
       "pay_end": "",
-      "phase": "upcoming",
-      "remaining": 600,
-      "signup_url": "",
+      "phase": "ongoing",
+      "remaining": 8640,
+      "signup_url": "checkRE/3739-6644a9b3aa15784d891d437675eb2b32-",
       "external_url": "https://mzj.cngy.gov.cn/new/show/91012bcb59204627bebf0bb9cc90a144.html"
     },
     {
@@ -36,7 +36,7 @@
       "pay_start": "",
       "pay_end": "",
       "phase": "upcoming",
-      "remaining": 4320,
+      "remaining": 2880,
       "signup_url": "",
       "external_url": "http://www.njpta.org.cn/"
     }
