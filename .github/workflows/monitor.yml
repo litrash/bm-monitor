@@ -17,42 +17,6 @@ jobs:
       - name: Checkout 仓库
         uses: actions/checkout@v4
 
-      - name: 安装 shadowsocks-libev
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq shadowsocks-libev
-
-      - name: 启动 SS 代理隧道
-        run: |
-          mkdir -p /tmp/ss
-          cat > /tmp/ss/config.json << EOF
-          {
-            "server": "${{ secrets.BM_SS_SERVER }}",
-            "server_port": ${{ secrets.BM_SS_PORT }},
-            "password": "${{ secrets.BM_SS_PASSWORD }}",
-            "method": "${{ secrets.BM_SS_METHOD }}",
-            "local_address": "127.0.0.1",
-            "local_port": 1080,
-            "timeout": 60
-          }
-          EOF
-          ss-local -c /tmp/ss/config.json -f /tmp/ss/ss-local.pid
-          sleep 2
-          echo "SS 代理已启动: socks5://127.0.0.1:1080"
-
-      - name: 调试代理连通性
-        run: |
-          set -x
-          echo "=== 测试 HTTP 连通性 ==="
-          curl -v --socks5 127.0.0.1:1080 --connect-timeout 10 "http://httpbin.org/ip" 2>&1 || true
-          echo "=== 测试 HTTPS 连通性 ==="
-          curl -v --socks5 127.0.0.1:1080 --connect-timeout 10 -k "https://httpbin.org/ip" 2>&1 || true
-          echo "=== 测试 zhaojiao.net HTTP ==="
-          curl -v --socks5 127.0.0.1:1080 --connect-timeout 10 "http://www.zhaojiao.net/zhaojiao/list-150.html?areaid=23" 2>&1 || true
-          echo "=== 测试 zhaojiao.net HTTPS ==="
-          curl -v --socks5 127.0.0.1:1080 --connect-timeout 10 -k "https://www.zhaojiao.net/zhaojiao/list-150.html?areaid=23" 2>&1 || true
-          set +x
-
       - name: 安装 Python
         uses: actions/setup-python@v5
         with:
@@ -64,7 +28,7 @@ jobs:
       - name: 运行统一监控
         env:
           CI: 'true'
-          BM_PROXY: 'socks5://127.0.0.1:1080'
+          BM_PROXY: ${{ secrets.BM_PROXY }}
           BM_SC_SENDKEY: ${{ secrets.BM_SC_SENDKEY }}
           BM_TG_BOT_TOKEN: ${{ secrets.BM_TG_BOT_TOKEN }}
           BM_TG_CHAT_ID: ${{ secrets.BM_TG_CHAT_ID }}
