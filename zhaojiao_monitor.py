@@ -24,8 +24,18 @@ from bs4 import BeautifulSoup
 DEFAULT_STATE = "zj_monitor_state.json"
 DEFAULT_LOG = "zj_monitor.log"
 
-UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-      "(KHTML, like Gecko) Chrome/120.0 Safari/537.36")
+UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+
+# 模拟完整浏览器请求头，避免被反爬拦截
+HEADERS = {
+    "User-Agent": UA,
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+    "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Connection": "keep-alive",
+    "Referer": "https://www.zhaojiao.net/",
+    "Cache-Control": "max-age=0",
+}
 
 log = logging.getLogger("zj_monitor")
 IS_CI = os.environ.get("CI") == "true" or os.environ.get("GITHUB_ACTIONS") == "true"
@@ -66,17 +76,27 @@ def _build_page_url(base_url, areaid, page_num):
 
 def fetch_page(base_url, areaid, page_num, retries=3):
     url = _build_page_url(base_url, areaid, page_num)
+    session = requests.Session()
+    last_error = None
     for i in range(retries):
         try:
-            r = requests.get(url, headers={"User-Agent": UA}, timeout=30)
+            if i == 0:
+                # 首次先访问首页建立 session
+                try:
+                    session.get("https://www.zhaojiao.net/", headers=HEADERS, timeout=15)
+                except Exception:
+                    pass
+            r = session.get(url, headers=HEADERS, timeout=30)
             r.raise_for_status()
             r.encoding = "utf-8"
             return r.text
         except Exception as e:
+            last_error = e
             if i == retries - 1:
                 raise
             log.warning("第%d页 第%d次抓取失败: %s, %d秒后重试...", page_num, i + 1, e, (i + 1) * 5)
             time.sleep((i + 1) * 5)
+    raise last_error
 
 
 def fetch_all_pages(cfg, pages=None):
