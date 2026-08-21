@@ -42,6 +42,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          touch bm_monitor_state.json zj_monitor_state.json
           git add bm_monitor_state.json zj_monitor_state.json
           if git diff --cached --quiet; then
             echo "状态无变化, 跳过提交"

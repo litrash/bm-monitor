@@ -98,6 +98,8 @@ def run_once():
     except Exception as e:
         log.error("招教网抓取失败: %s", e, exc_info=True)
         zj_report = f"⚠️ 招教网抓取失败: {e}"
+        # 确保状态文件存在，避免 git add 失败
+        zj_save_state(zj_cfg["state_file"], zj_load_state(zj_cfg["state_file"]).get("entries", []))
 
     # ===================================================================== #
     # 第三部分：组装统一消息
