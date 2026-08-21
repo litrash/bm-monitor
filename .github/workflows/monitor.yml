@@ -1,4 +1,4 @@
-name: 考生之家报名监控
+name: 统一招聘监控
 
 on:
   schedule:
@@ -9,7 +9,7 @@ on:
 jobs:
   monitor:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     permissions:
       contents: write
 
@@ -25,7 +25,7 @@ jobs:
       - name: 安装依赖
         run: pip install -r requirements.txt
 
-      - name: 运行监控 (强制推送日报)
+      - name: 运行统一监控
         env:
           CI: 'true'
           BM_SC_SENDKEY: ${{ secrets.BM_SC_SENDKEY }}
@@ -34,13 +34,15 @@ jobs:
           BM_KEYWORDS: ${{ secrets.BM_KEYWORDS }}
           BM_AREAS: ${{ secrets.BM_AREAS }}
           BM_ENDING_HOURS: ${{ secrets.BM_ENDING_HOURS }}
-        run: python bm_monitor.py --force
+          ZJ_PAGES: '3'
+          ZJ_AREAID: '23'
+        run: python unified_monitor.py
 
       - name: 提交状态更新
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add bm_monitor_state.json
+          git add bm_monitor_state.json zj_monitor_state.json
           if git diff --cached --quiet; then
             echo "状态无变化, 跳过提交"
           else
