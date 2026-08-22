@@ -1,33 +1,31 @@
-# Gitee Go 流水线配置 - 统一招聘监控
-# 每天北京时间 9:00 和 21:00 自动执行
+version: "1.0"
 name: 统一招聘监控
-
-# 定时触发
+displayName: 统一招聘监控（考生之家 + 招教网）
+stages:
+- name: 监控
+  displayName: 运行监控
+  strategy: naturally
+  trigger: auto
+  steps:
+  - step: build@python
+    name: 统一监控
+    displayName: 抓取并推送日报
+    pythonVersion: "3.12"
+    commands:
+    - pip install -r requirements.txt
+    - python unified_monitor.py
+    env:
+      BM_TG_BOT_TOKEN: 8854681783:AAGwaZP1QCLSbNc9j8I3W7G_iS1xUXbUW7I
+      BM_TG_CHAT_ID: "6830282298"
+      BM_SC_SENDKEY: SCT401635TStpnYt8keIXAANF0lthFMHgh
+      ZJ_PAGES: "3"
+      ZJ_AREAID: "23"
+    notify: []
+    strategy:
+      retry: "0"
 triggers:
   schedule:
-    - cron: '0 1,13 * * *'
-  # 手动触发
-  webhook: true
-
-stages:
-  - name: 监控阶段
-    jobs:
-      - name: 运行监控
-        image: python:3.12
-        # 只保留 cron 触发和手动触发，去掉 push 触发
-        steps:
-          - name: 安装依赖
-            run: |
-              pip install requests beautifulsoup4 lxml
-          - name: 运行统一监控
-            run: |
-              python unified_monitor.py
-            env:
-              BM_TG_BOT_TOKEN: $BM_TG_BOT_TOKEN
-              BM_TG_CHAT_ID: $BM_TG_CHAT_ID
-              BM_SC_SENDKEY: $BM_SC_SENDKEY
-              BM_KEYWORDS: $BM_KEYWORDS
-              BM_AREAS: $BM_AREAS
-              BM_ENDING_HOURS: $BM_ENDING_HOURS
-              ZJ_PAGES: '3'
-              ZJ_AREAID: '23'
+  - cron: "0 1,13 * * *"
+notify: []
+strategy:
+  blocking: true
