@@ -7,7 +7,8 @@ triggers:
       prefix:
         - ''
   schedule:
-  - cron: '0 1,13 * * *'
+  - cron: "0 6 * * *"
+  - cron: "0 18 * * *"
 stages:
 - name: 监控
   displayName: 运行监控
