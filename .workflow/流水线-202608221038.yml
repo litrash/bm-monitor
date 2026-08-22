@@ -1,0 +1,36 @@
+version: '1.0'
+name: 统一招聘监控
+displayName: 统一招聘监控（考生之家 + 招教网）
+triggers:
+  push:
+    branches:
+      prefix:
+        - ''
+  schedule:
+  - cron: "0 0 9 * * *"
+  - cron: "0 0 21 * * *"
+stages:
+- name: 监控
+  displayName: 运行监控
+  strategy: naturally
+  trigger: auto
+  steps:
+  - step: build@python
+    name: 统一监控
+    displayName: 抓取并推送日报
+    pythonVersion: '3.12'
+    commands:
+    - python -m pip install -r requirements.txt
+    - python unified_monitor.py
+    env:
+      BM_TG_BOT_TOKEN: 8854681783:AAGwaZP1QCLSbNc9j8I3W7G_iS1xUXbUW7I
+      BM_TG_CHAT_ID: '6830282298'
+      BM_SC_SENDKEY: SCT401635TStpnYt8keIXAANF0lthFMHgh
+      ZJ_PAGES: '3'
+      ZJ_AREAID: '23'
+    notify: []
+    strategy:
+      retry: '0'
+notify: []
+strategy:
+  blocking: true
