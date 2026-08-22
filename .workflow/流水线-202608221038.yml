@@ -20,14 +20,13 @@ stages:
     displayName: 抓取并推送日报
     pythonVersion: '3.12'
     commands:
+    - export BM_TG_BOT_TOKEN="8854681783:AAGwaZP1QCLSbNc9j8I3W7G_iS1xUXbUW7I"
+    - export BM_TG_CHAT_ID="6830282298"
+    - export BM_SC_SENDKEY="SCT401635TStpnYt8keIXAANF0lthFMHgh"
+    - export ZJ_PAGES="3"
+    - export ZJ_AREAID="23"
     - python -m pip install -r requirements.txt
     - python unified_monitor.py
-    env:
-      BM_TG_BOT_TOKEN: 8854681783:AAGwaZP1QCLSbNc9j8I3W7G_iS1xUXbUW7I
-      BM_TG_CHAT_ID: '6830282298'
-      BM_SC_SENDKEY: SCT401635TStpnYt8keIXAANF0lthFMHgh
-      ZJ_PAGES: '3'
-      ZJ_AREAID: '23'
     notify: []
     strategy:
       retry: '0'
