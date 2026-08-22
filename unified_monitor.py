@@ -72,7 +72,9 @@ def run_once():
         log.info("考生之家日报生成完成")
     except Exception as e:
         log.error("考生之家抓取失败: %s", e, exc_info=True)
-        bm_report = f"⚠️ 考生之家抓取失败: {e}"
+        # 错误信息中的 < > 会破坏 Telegram HTML 解析，转义
+        err_msg = str(e).replace("<", "&lt;").replace(">", "&gt;").replace("&", "&amp;").replace("&amp;lt;", "&lt;").replace("&amp;gt;", "&gt;")
+        bm_report = f"⚠️ 考生之家抓取失败: {err_msg}"
 
     # ===================================================================== #
     # 第二部分：招教网
@@ -97,7 +99,8 @@ def run_once():
         log.info("招教网日报生成完成")
     except Exception as e:
         log.error("招教网抓取失败: %s", e, exc_info=True)
-        zj_report = f"⚠️ 招教网抓取失败: {e}"
+        err_msg = str(e).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        zj_report = f"⚠️ 招教网抓取失败: {err_msg}"
         # 确保状态文件存在，避免 git add 失败
         zj_save_state(zj_cfg["state_file"], zj_load_state(zj_cfg["state_file"]).get("entries", []))
 
@@ -136,17 +139,15 @@ def run_once():
     if has_changes:
         title += " [有变化]"
 
-    # Telegram 主通道
+    # Server酱 主通道（国内服务器可用）
+    sc_ok = send_serverchan(bm_cfg["sc_sendkey"], title, full_report)
+
+    # Telegram 备用（海外服务器可用）
     tg_token = bm_cfg["tg_bot_token"]
     tg_chat_id = bm_cfg["tg_chat_id"]
     tg_ok = send_telegram(tg_token, tg_chat_id, title, full_report)
 
-    # Server酱 备用
-    sc_ok = False
-    if has_changes:
-        sc_ok = send_serverchan(bm_cfg["sc_sendkey"], title, full_report)
-
-    log.info("推送结果: Telegram=%s, Server酱=%s", "OK" if tg_ok else "FAIL", "OK" if sc_ok else "SKIP")
+    log.info("推送结果: Server酱=%s, Telegram=%s", "OK" if sc_ok else "FAIL", "OK" if tg_ok else "FAIL")
     log.info("\n%s", full_report)
 
     return full_report, tg_ok
