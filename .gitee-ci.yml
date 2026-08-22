@@ -6,9 +6,6 @@ triggers:
     branches:
       prefix:
         - ''
-  schedule:
-  - cron: "0 9 * * *"
-  - cron: "0 21 * * *"
 stages:
 - name: 监控
   displayName: 运行监控
