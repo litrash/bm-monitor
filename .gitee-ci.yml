@@ -12,13 +12,13 @@ stages:
   strategy: naturally
   trigger: auto
   steps:
-  - step: build@script
+  - step: build@python
     name: 统一监控
     displayName: 抓取并推送日报
-    script: |-
-      apt-get update -qq && apt-get install -y -qq python3 python3-pip
-      pip3 install requests beautifulsoup4 lxml
-      python3 unified_monitor.py
+    pythonVersion: '3.12'
+    commands:
+    - python -m pip install -r requirements.txt
+    - python unified_monitor.py
     env:
       BM_TG_BOT_TOKEN: 8854681783:AAGwaZP1QCLSbNc9j8I3W7G_iS1xUXbUW7I
       BM_TG_CHAT_ID: '6830282298'
