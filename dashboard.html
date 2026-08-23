@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>招聘监控 Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #f5f7fa; --card: #fff; --text: #2c3e50; --muted: #7f8c8d;
+  --border: #e0e4e8; --accent: #3498db; --red: #e74c3c; --green: #27ae60;
+  --orange: #f39c12; --purple: #8e44ad;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+header { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); color: #fff; padding: 24px 32px; }
+header h1 { font-size: 24px; margin-bottom: 4px; }
+header .sub { color: #a0aec0; font-size: 14px; }
+.stats-row { display: flex; gap: 16px; padding: 24px 32px; flex-wrap: wrap; }
+.stat-card { background: var(--card); border-radius: 12px; padding: 20px 24px; flex: 1; min-width: 140px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+.stat-card .num { font-size: 32px; font-weight: 700; }
+.stat-card .label { color: var(--muted); font-size: 13px; margin-top: 4px; }
+.stat-card.c1 .num { color: var(--accent); }
+.stat-card.c2 .num { color: var(--green); }
+.stat-card.c3 .num { color: var(--purple); }
+.stat-card.c4 .num { color: var(--red); }
+.tabs { display: flex; gap: 0; padding: 0 32px; border-bottom: 2px solid var(--border); }
+.tab-btn { padding: 12px 24px; border: none; background: none; cursor: pointer; font-size: 15px; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all 0.2s; }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+.tab-btn:hover { color: var(--text); }
+.tab-content { display: none; padding: 24px 32px; }
+.tab-content.active { display: block; }
+.charts-row { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; margin-bottom: 24px; }
+.charts-row-2 { display: grid; grid-template-columns: 1fr; gap: 24px; margin-bottom: 24px; }
+.chart-box { background: var(--card); border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+.chart-box h3 { font-size: 15px; margin-bottom: 16px; color: var(--text); }
+.filters { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
+.filters input { padding: 8px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; width: 260px; outline: none; }
+.filters input:focus { border-color: var(--accent); }
+.filter-btns { display: flex; gap: 6px; }
+.filter-btn { padding: 6px 14px; border: 1px solid var(--border); border-radius: 20px; background: var(--card); cursor: pointer; font-size: 13px; transition: all 0.2s; white-space: nowrap; }
+.filter-btn:hover { border-color: var(--accent); }
+.filter-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.filter-btn.city-btn { padding: 4px 10px; font-size: 12px; }
+.filter-btn.city-btn.active { background: var(--green); border-color: var(--green); }
+.city-filters { display: grid; grid-template-columns: repeat(9, auto); gap: 6px; justify-content: start; }
+.table-wrap { background: var(--card); border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+.table-scroll { max-height: 70vh; overflow-y: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { background: #f8f9fb; padding: 12px 16px; text-align: left; font-weight: 600; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid var(--border); position: sticky; top: 0; z-index: 1; }
+td { padding: 10px 16px; border-bottom: 1px solid var(--border); }
+tr:hover td { background: #f8f9fb; }
+.table-info { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; font-size: 13px; color: var(--muted); border-bottom: 1px solid var(--border); }
+.page-btns { display: flex; gap: 4px; }
+.page-btn { padding: 4px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--card); cursor: pointer; font-size: 12px; }
+.page-btn:hover { background: #f0f0f0; }
+.page-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+.badge-biannei { background: #d4efdf; color: #1e8449; }
+.badge-bianwai { background: #fadbd8; color: #c0392b; }
+.badge-xuandiao { background: #d6eaf8; color: #2471a3; }
+.badge-unknown { background: #eaecee; color: #7f8c8d; }
+.badge-hot { background: #fdedec; color: #e74c3c; }
+.bm-card { background: var(--card); border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border-left: 4px solid var(--accent); }
+.bm-card.ending { border-left-color: var(--red); }
+.bm-card .bm-title { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+.bm-card .bm-meta { color: var(--muted); font-size: 13px; }
+.bm-card .bm-meta span { margin-right: 16px; }
+.bm-card .countdown { display: inline-block; padding: 4px 12px; border-radius: 6px; font-weight: 600; font-size: 13px; }
+.countdown.urgent { background: #fadbd8; color: #c0392b; }
+.countdown.warn { background: #fef9e7; color: #b7950b; }
+.countdown.ok { background: #d5f5e3; color: #1e8449; }
+.no-results { text-align: center; padding: 40px; color: var(--muted); }
+footer { text-align: center; padding: 24px; color: var(--muted); font-size: 12px; }
+@media (max-width: 768px) {
+  .charts-row { grid-template-columns: 1fr; }
+  .stats-row { padding: 16px; }
+  .tabs, .tab-content { padding-left: 16px; padding-right: 16px; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📊 招聘监控 Dashboard</h1>
+  <div class="sub">考生之家 + 招教网 · 数据更新于 <span id="updateTime"></span></div>
+</header>
+
+<div class="stats-row" id="statsRow"></div>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="switchTab('bm')">🏫 考生之家</button>
+  <button class="tab-btn" onclick="switchTab('zj')">🎓 招教网</button>
+</div>
+
+<div class="tab-content active" id="tab-bm">
+  <div class="charts-row-2">
+    <div class="chart-box"><h3>📅 报名项目时间线</h3><div id="bmTimeline"></div></div>
+  </div>
+</div>
+
+<div class="tab-content" id="tab-zj">
+  <div class="charts-row">
+    <div class="chart-box"><h3>🏙 城市分布</h3><canvas id="chartCity"></canvas></div>
+    <div class="chart-box"><h3>📌 编制类型</h3><canvas id="chartBianzhi"></canvas></div>
+  </div>
+  <div class="charts-row">
+    <div class="chart-box"><h3>📈 每日新增</h3><canvas id="chartDaily"></canvas></div>
+  </div>
+  <div class="filters">
+    <input type="text" id="zjSearch" placeholder="🔍 搜索标题..." oninput="zjPage=1;renderZjTable()">
+    <div class="filter-btns" id="bzFilters"></div>
+  </div>
+  <div class="filters" style="margin-bottom:16px">
+    <span style="font-size:13px;color:var(--muted);margin-right:4px;line-height:28px">🏙</span>
+    <div class="city-filters" id="cityFilters"></div>
+  </div>
+  <div class="table-wrap">
+    <div class="table-info">
+      <span id="zjTableInfo">加载中...</span>
+      <div class="page-btns" id="zjPages"></div>
+    </div>
+    <div class="table-scroll">
+      <table id="zjTable"><thead><tr><th>编制</th><th>城市</th><th>标题</th><th>人数</th><th>日期</th></tr></thead><tbody></tbody></table>
+    </div>
+  </div>
+  <div class="no-results" id="zjNoResults" style="display:none">没有匹配的结果</div>
+</div>
+
+<footer>招聘监控 Dashboard | litrash/bm-monitor</footer>
+
+<script type="application/json" id="bm-data">{"active": [{"key": "甘孜藏族自治州|甘孜州2026年公开招募养老服务管理专员招募|2026年08月21日 09:00|2026年08月24日 18:00", "area": "甘孜藏族自治州", "name": "甘孜州2026年公开招募养老服务管理专员招募", "start": "2026年08月21日 09:00", "end": "2026年08月24日 18:00", "pay_start": "2026年08月21日 09:00", "pay_end": "2026年08月25日 17:30", "phase": "ongoing", "remaining": 1440, "signup_url": "checkRE/3740-79f1cec35c5c1e9eacb6ba164c13fc0b-", "external_url": "https://www.gzzrsks.com.cn/newsDetail/30091.html"}, {"key": "广元市|广元市2026年养老服务管理专员政策性岗位公开招募|2026年08月21日 10:00|2026年08月28日 08:00", "area": "广元市", "name": "广元市2026年养老服务管理专员政策性岗位公开招募", "start": "2026年08月21日 10:00", "end": "2026年08月28日 08:00", "pay_start": "", "pay_end": "", "phase": "ongoing", "remaining": 5760, "signup_url": "checkRE/3739-6644a9b3aa15784d891d437675eb2b32-", "external_url": "https://mzj.cngy.gov.cn/new/show/91012bcb59204627bebf0bb9cc90a144.html"}, {"key": "内江市|2026年资中县面向社会公开选聘社区工作者|2026年08月24日 09:00|2026年08月28日 18:00", "area": "内江市", "name": "2026年资中县面向社会公开选聘社区工作者", "start": "2026年08月24日 09:00", "end": "2026年08月28日 18:00", "pay_start": "", "pay_end": "", "phase": "upcoming", "remaining": 1200, "signup_url": "", "external_url": "http://www.njpta.org.cn/"}], "closed": [{"name": "通江县2026年公开招募增量政策性岗位工作人员", "external_url": "https://www.tjxzf.gov.cn/content/article/14072857?shareKey=f4dd9dbdec194b0e9055990091462eff"}, {"name": "会东县2026年公开考试招聘编外小学英语教师", "external_url": "https://mp.weixin.qq.com/s/D9uNxYOs-UUsLAAGwtydOA"}, {"name": "达州市2026年养老服务管理专员政策性岗位公开招募", "external_url": "http://www.dzrsks.com.cn/"}]}</script>
+<script type="application/json" id="zj-data">[{"key": "2026年四川成都崇州市教育局所属学校公开招聘“两自一包”教师的公告（30人）|热门推荐", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都崇州市教育局所属学校公开招聘“两自一包”教师的公告（30人）", "date": "热门推荐", "count": 30, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-190000.html"}, {"key": "2026-2027学年成都市金牛区教育局直属中小学（幼儿园）编外教师招聘公告（二）（220人）|热门推荐", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026-2027学年成都市金牛区教育局直属中小学（幼儿园）编外教师招聘公告（二）（220人）", "date": "热门推荐", "count": 220, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-189650.html"}, {"key": "2026年四川成都市简阳市招聘中小学校（园）编外教师公告（286人）|热门推荐", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都市简阳市招聘中小学校（园）编外教师公告（286人）", "date": "热门推荐", "count": 286, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-189381.html"}, {"key": "2026年四川阿坝州事业单位第二批次考核招聘96人公告（含教师岗4人）|2026-08-22", "area": "[阿坝藏族羌族自治州教师招聘]", "city": "阿坝藏族羌族自治州", "title": "2026年四川阿坝州事业单位第二批次考核招聘96人公告（含教师岗4人）", "date": "2026-08-22", "count": 4, "bianzhi": "编制", "url": "https://www.zhaojiao.net/zhaojiao/show-190492.html"}, {"key": "2026年四川省旅游学校兼职教师招聘公告（8人）|2026-08-22", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川省旅游学校兼职教师招聘公告（8人）", "date": "2026-08-22", "count": 8, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-190489.html"}, {"key": "2026年四川成都市青白江区外国语小学校招聘编外教师公告(第二批次_1人)|2026-08-22", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都市青白江区外国语小学校招聘编外教师公告(第二批次_1人)", "date": "2026-08-22", "count": 1, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-190488.html"}, {"key": "2026年四川成都市大弯中学校(初中部)招聘编外教师公告（第四批次_3人）|2026-08-22", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都市大弯中学校(初中部)招聘编外教师公告（第四批次_3人）", "date": "2026-08-22", "count": 3, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-190487.html"}, {"key": "2026年四川乐山市斑竹湾实验学校招聘编制外教师公告（9人）|2026-08-21", "area": "[乐山市教师招聘]", "city": "乐山市", "title": "2026年四川乐山市斑竹湾实验学校招聘编制外教师公告（9人）", "date": "2026-08-21", "count": 9, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-190356.html"}, {"key": "2026年四川乐山市太白路小学招聘编制外教师公告（8人）|2026-08-21", "area": "[乐山市教师招聘]", "city": "乐山市", "title": "2026年四川乐山市太白路小学招聘编制外教师公告（8人）", "date": "2026-08-21", "count": 8, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-190353.html"}, {"key": "2026—2027学年四川自贡高新技术产业开发区管理委员会社会事业局银龄教师招募公告（14人）|2026-08-21", "area": "[自贡市教师招聘]", "city": "自贡市", "title": "2026—2027学年四川自贡高新技术产业开发区管理委员会社会事业局银龄教师招募公告（14人）", "date": "2026-08-21", "count": 14, "bianzhi": "未知", "url": "https://www.zhaojiao.net/zhaojiao/show-190352.html"}, {"key": "2026年四川乐山市肖坝实验学校招聘编制外教师公告（15人）|2026-08-21", "area": "[乐山市教师招聘]", "city": "乐山市", "title": "2026年四川乐山市肖坝实验学校招聘编制外教师公告（15人）", "date": "2026-08-21", "count": 15, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-190328.html"}, {"key": "2026年四川乐山市通江小学招聘编制外教师公告（30人）|2026-08-21", "area": "[乐山市教师招聘]", "city": "乐山市", "title": "2026年四川乐山市通江小学招聘编制外教师公告（30人）", "date": "2026-08-21", "count": 30, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-190326.html"}, {"key": "2026年四川乐山市嘉州学校公开招聘编制外教师公告（13人）|2026-08-21", "area": "[乐山市教师招聘]", "city": "乐山市", "title": "2026年四川乐山市嘉州学校公开招聘编制外教师公告（13人）", "date": "2026-08-21", "count": 13, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-190325.html"}, {"key": "2026年四川乐山七中公开招聘编制外教师公告（37人）|2026-08-21", "area": "[乐山市教师招聘]", "city": "乐山市", "title": "2026年四川乐山七中公开招聘编制外教师公告（37人）", "date": "2026-08-21", "count": 37, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-190324.html"}, {"key": "2026年四川乐山市徐家扁小学公开招聘编制外教师公告（4人）|2026-08-21", "area": "[乐山市教师招聘]", "city": "乐山市", "title": "2026年四川乐山市徐家扁小学公开招聘编制外教师公告（4人）", "date": "2026-08-21", "count": 4, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-190322.html"}, {"key": "2026年四川成都崇州市教育系统公开招聘编外储备教师的公告(68人)|2026-08-20", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都崇州市教育系统公开招聘编外储备教师的公告(68人)", "date": "2026-08-20", "count": 68, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-190213.html"}, {"key": "2026年四川成都市锦江区教育局公办学校员额（储备）教师招聘公告|2026-08-19", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都市锦江区教育局公办学校员额（储备）教师招聘公告", "date": "2026-08-19", "count": null, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-190177.html"}, {"key": "2026年四川成都市简阳市招聘中小学校（园）编外教师补充公告（21人）|2026-08-19", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都市简阳市招聘中小学校（园）编外教师补充公告（21人）", "date": "2026-08-19", "count": 21, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-190164.html"}, {"key": "2026年四川成都市大弯中学校(高中部)招聘编外教师公告(3人)|2026-08-19", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都市大弯中学校(高中部)招聘编外教师公告(3人)", "date": "2026-08-19", "count": 3, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-190161.html"}, {"key": "2026年第三季度四川成都市双流区教育系统招聘第二批编外教师公告（37人）|2026-08-19", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年第三季度四川成都市双流区教育系统招聘第二批编外教师公告（37人）", "date": "2026-08-19", "count": 37, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-190132.html"}, {"key": "2026年四川成都市都江堰市教育系统招聘编外教师公告（22人）|2026-08-18", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都市都江堰市教育系统招聘编外教师公告（22人）", "date": "2026-08-18", "count": 22, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-190072.html"}, {"key": "2026—2027学年四川自贡市沿滩镇中心幼儿园教师招聘公告（15人）|2026-08-18", "area": "[自贡市教师招聘]", "city": "自贡市", "title": "2026—2027学年四川自贡市沿滩镇中心幼儿园教师招聘公告（15人）", "date": "2026-08-18", "count": 15, "bianzhi": "未知", "url": "https://www.zhaojiao.net/zhaojiao/show-190041.html"}, {"key": "2026年四川广元市昭化区选调城区部分学校紧缺学科教师公告（17人）|2026-08-18", "area": "[广元市教师招聘]", "city": "广元市", "title": "2026年四川广元市昭化区选调城区部分学校紧缺学科教师公告（17人）", "date": "2026-08-18", "count": 17, "bianzhi": "选调", "url": "https://www.zhaojiao.net/zhaojiao/show-190017.html"}, {"key": "2026年四川成都崇州市教育局所属学校公开招聘“两自一包”教师的公告（30人）|2026-08-17", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都崇州市教育局所属学校公开招聘“两自一包”教师的公告（30人）", "date": "2026-08-17", "count": 30, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-190000.html"}, {"key": "2026年四川省成都市盐道街中学公开补招聘员额教师公告（9人）|2026-08-17", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川省成都市盐道街中学公开补招聘员额教师公告（9人）", "date": "2026-08-17", "count": 9, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-189966.html"}, {"key": "2026年四川巴中市教育局考核招聘26年毕业部属公费师范生和国家“优师计划”师范生公告（8人）|2026-08-17", "area": "[巴中市教师招聘]", "city": "巴中市", "title": "2026年四川巴中市教育局考核招聘26年毕业部属公费师范生和国家“优师计划”师范生公告（8人）", "date": "2026-08-17", "count": 8, "bianzhi": "编制", "url": "https://www.zhaojiao.net/zhaojiao/show-189958.html"}, {"key": "2026年四川省绵阳市丰谷中学外聘教师公告(7人)|2026-08-17", "area": "[绵阳市教师招聘]", "city": "绵阳市", "title": "2026年四川省绵阳市丰谷中学外聘教师公告(7人)", "date": "2026-08-17", "count": 7, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-189940.html"}, {"key": "2026年四川内江市东兴区阳光幼儿园考核招聘教职工（第一次）公告（15人）|2026-08-14", "area": "[内江市教师招聘]", "city": "内江市", "title": "2026年四川内江市东兴区阳光幼儿园考核招聘教职工（第一次）公告（15人）", "date": "2026-08-14", "count": 15, "bianzhi": "编制", "url": "https://www.zhaojiao.net/zhaojiao/show-189865.html"}, {"key": "2026年四川成都高新中学天府一街分校招聘教师公告(12人)|2026-08-14", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都高新中学天府一街分校招聘教师公告(12人)", "date": "2026-08-14", "count": 12, "bianzhi": "未知", "url": "https://www.zhaojiao.net/zhaojiao/show-189827.html"}, {"key": "2026年四川达州达县职业高级中学招聘教师公告(23人)|2026-08-14", "area": "[达州市教师招聘]", "city": "达州市", "title": "2026年四川达州达县职业高级中学招聘教师公告(23人)", "date": "2026-08-14", "count": 23, "bianzhi": "未知", "url": "https://www.zhaojiao.net/zhaojiao/show-189788.html"}, {"key": "2026年四川省成都西藏中学（四川省成都新航中学）招聘教师公告(8人)|2026-08-14", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川省成都西藏中学（四川省成都新航中学）招聘教师公告(8人)", "date": "2026-08-14", "count": 8, "bianzhi": "未知", "url": "https://www.zhaojiao.net/zhaojiao/show-189782.html"}, {"key": "2026年下半年四川凉山州西昌市教育系统考核招聘教师（80人）|2026-08-13", "area": "[凉山彝族自治州教师招聘]", "city": "凉山彝族自治州", "title": "2026年下半年四川凉山州西昌市教育系统考核招聘教师（80人）", "date": "2026-08-13", "count": 80, "bianzhi": "编制", "url": "https://www.zhaojiao.net/zhaojiao/show-189733.html"}, {"key": "2026年下半年四川成都大邑县教育系统第二轮公开招聘编外教师公告（16人）|2026-08-13", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年下半年四川成都大邑县教育系统第二轮公开招聘编外教师公告（16人）", "date": "2026-08-13", "count": 16, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-189721.html"}, {"key": "2026年四川凉山会东县公开招聘小学英语编外教师公告（17人）|2026-08-13", "area": "[凉山彝族自治州教师招聘]", "city": "凉山彝族自治州", "title": "2026年四川凉山会东县公开招聘小学英语编外教师公告（17人）", "date": "2026-08-13", "count": 17, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-189720.html"}, {"key": "2026年四川遂宁射洪中学校招聘教师公告(8人)|2026-08-13", "area": "[遂宁市教师招聘]", "city": "遂宁市", "title": "2026年四川遂宁射洪中学校招聘教师公告(8人)", "date": "2026-08-13", "count": 8, "bianzhi": "未知", "url": "https://www.zhaojiao.net/zhaojiao/show-189719.html"}, {"key": "2026年下半年四川成都崇州市教育局招聘员额教师公告(33人)|2026-08-13", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年下半年四川成都崇州市教育局招聘员额教师公告(33人)", "date": "2026-08-13", "count": 33, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-189717.html"}, {"key": "2026-2027学年成都市金牛区教育局直属中小学（幼儿园）编外教师招聘公告（二）（220人）|2026-08-13", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026-2027学年成都市金牛区教育局直属中小学（幼儿园）编外教师招聘公告（二）（220人）", "date": "2026-08-13", "count": 220, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-189650.html"}, {"key": "2026—2027学年四川成都七中万达学校编外教师招聘公告（第二批_30人）|2026-08-12", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026—2027学年四川成都七中万达学校编外教师招聘公告（第二批_30人）", "date": "2026-08-12", "count": 30, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-189633.html"}, {"key": "2026年四川成都市彭州市公开考核招聘引领型教师公告（12人）|2026-08-12", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都市彭州市公开考核招聘引领型教师公告（12人）", "date": "2026-08-12", "count": 12, "bianzhi": "编制", "url": "https://www.zhaojiao.net/zhaojiao/show-189631.html"}, {"key": "2026—2027学年四川成都市金牛区机关第三幼儿园编外教师及保育员招聘公告(9人)|2026-08-12", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026—2027学年四川成都市金牛区机关第三幼儿园编外教师及保育员招聘公告(9人)", "date": "2026-08-12", "count": 9, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-189601.html"}, {"key": "2026—2027学年四川成都市石笋街小学校一品天下分校编外教师招聘公告（9人）|2026-08-12", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026—2027学年四川成都市石笋街小学校一品天下分校编外教师招聘公告（9人）", "date": "2026-08-12", "count": 9, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-189600.html"}, {"key": "2026—2027学年四川成都市金牛区机关第二幼儿园编外教师及保育员招聘公告(11人)|2026-08-12", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026—2027学年四川成都市金牛区机关第二幼儿园编外教师及保育员招聘公告(11人)", "date": "2026-08-12", "count": 11, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-189558.html"}, {"key": "2026—2027学年四川成都市第十七幼儿园编外教师及保育员招聘公告(12人)|2026-08-12", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026—2027学年四川成都市第十七幼儿园编外教师及保育员招聘公告(12人)", "date": "2026-08-12", "count": 12, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-189557.html"}, {"key": "2026年四川成都市教育科学研究院附属中学招聘教师、教辅人员公告（24人）|2026-08-12", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都市教育科学研究院附属中学招聘教师、教辅人员公告（24人）", "date": "2026-08-12", "count": 24, "bianzhi": "未知", "url": "https://www.zhaojiao.net/zhaojiao/show-189556.html"}, {"key": "2026—2027学年四川成都市锦西中学校编外教师招聘公告（8人）|2026-08-12", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026—2027学年四川成都市锦西中学校编外教师招聘公告（8人）", "date": "2026-08-12", "count": 8, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-189534.html"}, {"key": "2026-2027学年四川成都市五丁小学校编外教师招聘公告（5人）|2026-08-12", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026-2027学年四川成都市五丁小学校编外教师招聘公告（5人）", "date": "2026-08-12", "count": 5, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-189530.html"}, {"key": "2026年四川成都邛崃市教育系统第二次公开招聘编外教师公告（24人）|2026-08-11", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都邛崃市教育系统第二次公开招聘编外教师公告（24人）", "date": "2026-08-11", "count": 24, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-189516.html"}, {"key": "2026年四川成都市温江区特殊教育学校公开招聘编外教师公告（6人）|2026-08-11", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都市温江区特殊教育学校公开招聘编外教师公告（6人）", "date": "2026-08-11", "count": 6, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-189484.html"}, {"key": "2026年四川成都市温江区金马学校公开招聘编外教职工公告（14人）|2026-08-11", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都市温江区金马学校公开招聘编外教职工公告（14人）", "date": "2026-08-11", "count": 14, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-189480.html"}, {"key": "2026年四川成都市温江区东大街第二小学校招聘编外教师公告（10人）|2026-08-11", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都市温江区东大街第二小学校招聘编外教师公告（10人）", "date": "2026-08-11", "count": 10, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-189477.html"}, {"key": "2026年四川阿坝州考核招聘26届国家“优师计划”师范毕业生公告（1人）|2026-08-10", "area": "[阿坝藏族羌族自治州教师招聘]", "city": "阿坝藏族羌族自治州", "title": "2026年四川阿坝州考核招聘26届国家“优师计划”师范毕业生公告（1人）", "date": "2026-08-10", "count": 1, "bianzhi": "编制", "url": "https://www.zhaojiao.net/zhaojiao/show-189407.html"}, {"key": "2026年四川成都市简阳市招聘中小学校（园）编外教师公告（286人）|2026-08-10", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都市简阳市招聘中小学校（园）编外教师公告（286人）", "date": "2026-08-10", "count": 286, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-189381.html"}, {"key": "2026年四川遂宁市船山职业技术学校编外教师招聘公告（10人）|2026-08-10", "area": "[遂宁市教师招聘]", "city": "遂宁市", "title": "2026年四川遂宁市船山职业技术学校编外教师招聘公告（10人）", "date": "2026-08-10", "count": 10, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-189343.html"}, {"key": "2026年四川成都高新区银都紫藤初中学校编外教师招聘公告（36人）|2026-08-10", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都高新区银都紫藤初中学校编外教师招聘公告（36人）", "date": "2026-08-10", "count": 36, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-189324.html"}, {"key": "2026年四川泸州市龙马潭区招聘员额教师公告（18人）|2026-08-10", "area": "[泸州市教师招聘]", "city": "泸州市", "title": "2026年四川泸州市龙马潭区招聘员额教师公告（18人）", "date": "2026-08-10", "count": 18, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-189323.html"}, {"key": "2026年秋季四川省广安友谊中学招聘教辅人员公告（15人）|2026-08-10", "area": "[广安市教师招聘]", "city": "广安市", "title": "2026年秋季四川省广安友谊中学招聘教辅人员公告（15人）", "date": "2026-08-10", "count": 15, "bianzhi": "未知", "url": "https://www.zhaojiao.net/zhaojiao/show-189313.html"}, {"key": "2026年四川成都高新区锦城小学招聘教师公告(12人)|2026-08-10", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都高新区锦城小学招聘教师公告(12人)", "date": "2026-08-10", "count": 12, "bianzhi": "未知", "url": "https://www.zhaojiao.net/zhaojiao/show-189312.html"}, {"key": "2026年四川省成都高新实验中学招聘教师公告（4人）|2026-08-08", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川省成都高新实验中学招聘教师公告（4人）", "date": "2026-08-08", "count": 4, "bianzhi": "未知", "url": "https://www.zhaojiao.net/zhaojiao/show-189221.html"}, {"key": "2026年四川省档案学校招聘教师公告（9人）|2026-08-07", "area": "[雅安市教师招聘]", "city": "雅安市", "title": "2026年四川省档案学校招聘教师公告（9人）", "date": "2026-08-07", "count": 9, "bianzhi": "未知", "url": "https://www.zhaojiao.net/zhaojiao/show-189144.html"}, {"key": "2026年四川泸州市职业技术学校考核招聘教师公告（5人）|2026-08-07", "area": "[泸州市教师招聘]", "city": "泸州市", "title": "2026年四川泸州市职业技术学校考核招聘教师公告（5人）", "date": "2026-08-07", "count": 5, "bianzhi": "编制", "url": "https://www.zhaojiao.net/zhaojiao/show-189142.html"}, {"key": "2026下半年四川事业单位统考（含教师岗）招录预告|2026-08-07", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026下半年四川事业单位统考（含教师岗）招录预告", "date": "2026-08-07", "count": null, "bianzhi": "未知", "url": "https://www.zhaojiao.net/zhaojiao/show-189114.html"}, {"key": "2026年四川成都市新都区教育科学研究院附属中学校招聘教师公告(4人)|2026-08-06", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都市新都区教育科学研究院附属中学校招聘教师公告(4人)", "date": "2026-08-06", "count": 4, "bianzhi": "未知", "url": "https://www.zhaojiao.net/zhaojiao/show-189062.html"}, {"key": "2026年四川泸州市江阳区教育系统公开考核招聘教师公告（2人）|2026-08-06", "area": "[泸州市教师招聘]", "city": "泸州市", "title": "2026年四川泸州市江阳区教育系统公开考核招聘教师公告（2人）", "date": "2026-08-06", "count": 2, "bianzhi": "编制", "url": "https://www.zhaojiao.net/zhaojiao/show-188996.html"}, {"key": "2026年四川雅安宝兴县考核招聘紧缺教师公告（10人）|2026-08-04", "area": "[雅安市教师招聘]", "city": "雅安市", "title": "2026年四川雅安宝兴县考核招聘紧缺教师公告（10人）", "date": "2026-08-04", "count": 10, "bianzhi": "编制", "url": "https://www.zhaojiao.net/zhaojiao/show-188805.html"}, {"key": "2026年四川广安华蓥市中小学公开考调市外中小学教师的公告（8人）|2026-08-04", "area": "[广安市教师招聘]", "city": "广安市", "title": "2026年四川广安华蓥市中小学公开考调市外中小学教师的公告（8人）", "date": "2026-08-04", "count": 8, "bianzhi": "选调", "url": "https://www.zhaojiao.net/zhaojiao/show-188780.html"}, {"key": "2026年下半年四川绵阳三台县教体系统面向县内农村学校选调紧缺学科教师公告（61人）|2026-08-04", "area": "[绵阳市教师招聘]", "city": "绵阳市", "title": "2026年下半年四川绵阳三台县教体系统面向县内农村学校选调紧缺学科教师公告（61人）", "date": "2026-08-04", "count": 61, "bianzhi": "选调", "url": "https://www.zhaojiao.net/zhaojiao/show-188761.html"}, {"key": "2026年四川自贡高新区卧龙湖幼儿园高峰分园招聘教师岗（4人）|2026-08-04", "area": "[自贡市教师招聘]", "city": "自贡市", "title": "2026年四川自贡高新区卧龙湖幼儿园高峰分园招聘教师岗（4人）", "date": "2026-08-04", "count": 4, "bianzhi": "未知", "url": "https://www.zhaojiao.net/zhaojiao/show-188751.html"}, {"key": "2026年四川自贡高新区狮子山幼儿园绿茵分园招聘教师岗（12人）|2026-08-04", "area": "[自贡市教师招聘]", "city": "自贡市", "title": "2026年四川自贡高新区狮子山幼儿园绿茵分园招聘教师岗（12人）", "date": "2026-08-04", "count": 12, "bianzhi": "未知", "url": "https://www.zhaojiao.net/zhaojiao/show-188752.html"}, {"key": "2026年下半年四川绵阳盐亭县公开考核招聘高中教师公告（3人）|2026-08-04", "area": "[绵阳市教师招聘]", "city": "绵阳市", "title": "2026年下半年四川绵阳盐亭县公开考核招聘高中教师公告（3人）", "date": "2026-08-04", "count": 3, "bianzhi": "编制", "url": "https://www.zhaojiao.net/zhaojiao/show-188750.html"}, {"key": "2026年四川达州万源市考核招聘26届省属公费师范生和地方优师专项师范生的公告（47人）|2026-08-03", "area": "[达州市教师招聘]", "city": "达州市", "title": "2026年四川达州万源市考核招聘26届省属公费师范生和地方优师专项师范生的公告（47人）", "date": "2026-08-03", "count": 47, "bianzhi": "编制", "url": "https://www.zhaojiao.net/zhaojiao/show-188741.html"}, {"key": "2026年四川达州市通川区考核招聘26届公费师范毕业生公告（18人）|2026-08-03", "area": "[达州市教师招聘]", "city": "达州市", "title": "2026年四川达州市通川区考核招聘26届公费师范毕业生公告（18人）", "date": "2026-08-03", "count": 18, "bianzhi": "编制", "url": "https://www.zhaojiao.net/zhaojiao/show-188739.html"}, {"key": "2026年四川成都高新区石羊街道办事处公办幼儿园招聘教师岗（21人）|2026-08-03", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都高新区石羊街道办事处公办幼儿园招聘教师岗（21人）", "date": "2026-08-03", "count": 21, "bianzhi": "未知", "url": "https://www.zhaojiao.net/zhaojiao/show-188711.html"}, {"key": "2026年四川成都彭州市教育局所属学校员额教师招聘公告（188人）|2026-08-03", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都彭州市教育局所属学校员额教师招聘公告（188人）", "date": "2026-08-03", "count": 188, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-188668.html"}, {"key": "2026年四川省广元市川师大万达中学自主公开考核招聘教师公告（10人）|2026-08-03", "area": "[广元市教师招聘]", "city": "广元市", "title": "2026年四川省广元市川师大万达中学自主公开考核招聘教师公告（10人）", "date": "2026-08-03", "count": 10, "bianzhi": "编制", "url": "https://www.zhaojiao.net/zhaojiao/show-188651.html"}, {"key": "2026年四川巴中通江县公开选调农村在编教师到城区学校任教的公告（150人）|2026-07-31", "area": "[巴中市教师招聘]", "city": "巴中市", "title": "2026年四川巴中通江县公开选调农村在编教师到城区学校任教的公告（150人）", "date": "2026-07-31", "count": 150, "bianzhi": "选调", "url": "https://www.zhaojiao.net/zhaojiao/show-188560.html"}, {"key": "2026年四川成都市锦江区教育局公办学校员额（储备）教师招聘公告|2026-07-31", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都市锦江区教育局公办学校员额（储备）教师招聘公告", "date": "2026-07-31", "count": null, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-188509.html"}, {"key": "2026年四川省成都市盐道街中学公开招聘员额教师公告（16人）|2026-07-31", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川省成都市盐道街中学公开招聘员额教师公告（16人）", "date": "2026-07-31", "count": 16, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-188500.html"}, {"key": "2026年四川凉山越西县招聘幼儿教师岗(42人)|2026-07-31", "area": "[凉山彝族自治州教师招聘]", "city": "凉山彝族自治州", "title": "2026年四川凉山越西县招聘幼儿教师岗(42人)", "date": "2026-07-31", "count": 42, "bianzhi": "未知", "url": "https://www.zhaojiao.net/zhaojiao/show-188499.html"}, {"key": "2026年四川达州万源市部分中小学幼儿园公开选调教师公告（121人）|2026-07-30", "area": "[达州市教师招聘]", "city": "达州市", "title": "2026年四川达州万源市部分中小学幼儿园公开选调教师公告（121人）", "date": "2026-07-30", "count": 121, "bianzhi": "选调", "url": "https://www.zhaojiao.net/zhaojiao/show-188445.html"}, {"key": "2026年四川广元市利州区教育局考调中心城区中小学教师公告（60人）|2026-07-30", "area": "[广元市教师招聘]", "city": "广元市", "title": "2026年四川广元市利州区教育局考调中心城区中小学教师公告（60人）", "date": "2026-07-30", "count": 60, "bianzhi": "选调", "url": "https://www.zhaojiao.net/zhaojiao/show-188439.html"}, {"key": "2026年四川成都高新区中和街道公办幼儿园招聘编外教师岗（39人）|2026-07-30", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都高新区中和街道公办幼儿园招聘编外教师岗（39人）", "date": "2026-07-30", "count": 39, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-188433.html"}, {"key": "2026年四川达州开江县考核招聘26届省属公费师范毕业生公告（20人）|2026-07-30", "area": "[达州市教师招聘]", "city": "达州市", "title": "2026年四川达州开江县考核招聘26届省属公费师范毕业生公告（20人）", "date": "2026-07-30", "count": 20, "bianzhi": "编制", "url": "https://www.zhaojiao.net/zhaojiao/show-188422.html"}, {"key": "2026年四川泸州古蔺县第八幼儿园招聘教师岗（10人）|2026-07-30", "area": "[泸州市教师招聘]", "city": "泸州市", "title": "2026年四川泸州古蔺县第八幼儿园招聘教师岗（10人）", "date": "2026-07-30", "count": 10, "bianzhi": "未知", "url": "https://www.zhaojiao.net/zhaojiao/show-188407.html"}, {"key": "2026年四川巴中经开区所属学校公开选调紧缺学科教师公告（20人）|2026-07-29", "area": "[巴中市教师招聘]", "city": "巴中市", "title": "2026年四川巴中经开区所属学校公开选调紧缺学科教师公告（20人）", "date": "2026-07-29", "count": 20, "bianzhi": "选调", "url": "https://www.zhaojiao.net/zhaojiao/show-188303.html"}, {"key": "2026年四川凉山西昌市考核聘用公立幼儿园教师公告（77人）|2026-07-29", "area": "[凉山彝族自治州教师招聘]", "city": "凉山彝族自治州", "title": "2026年四川凉山西昌市考核聘用公立幼儿园教师公告（77人）", "date": "2026-07-29", "count": 77, "bianzhi": "未知", "url": "https://www.zhaojiao.net/zhaojiao/show-188266.html"}, {"key": "2026年四川绵阳平武县四川省属公费师范毕业生、地方优师专项师范生直接考核招聘公告（12人）|2026-07-28", "area": "[绵阳市教师招聘]", "city": "绵阳市", "title": "2026年四川绵阳平武县四川省属公费师范毕业生、地方优师专项师范生直接考核招聘公告（12人）", "date": "2026-07-28", "count": 12, "bianzhi": "编制", "url": "https://www.zhaojiao.net/zhaojiao/show-188228.html"}, {"key": "2026年四川凉山布拖县特木里镇第二幼儿园辅导员考试招聘公告（30人）|2026-07-28", "area": "[凉山彝族自治州教师招聘]", "city": "凉山彝族自治州", "title": "2026年四川凉山布拖县特木里镇第二幼儿园辅导员考试招聘公告（30人）", "date": "2026-07-28", "count": 30, "bianzhi": "未知", "url": "https://www.zhaojiao.net/zhaojiao/show-188218.html"}, {"key": "2026年四川绵阳北川县直接考核招聘四川省属公费师范毕业生和地方优师专项师范毕业生公告（10人）|2026-07-28", "area": "[绵阳市教师招聘]", "city": "绵阳市", "title": "2026年四川绵阳北川县直接考核招聘四川省属公费师范毕业生和地方优师专项师范毕业生公告（10人）", "date": "2026-07-28", "count": 10, "bianzhi": "编制", "url": "https://www.zhaojiao.net/zhaojiao/show-188212.html"}, {"key": "【汇总】2026—2027学年四川成都市金牛区编外教师招聘公告（384人）|2026-07-28", "area": "[成都市教师招聘]", "city": "成都市", "title": "【汇总】2026—2027学年四川成都市金牛区编外教师招聘公告（384人）", "date": "2026-07-28", "count": 384, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-188192.html"}, {"key": "2026年下半年四川成都大邑县教育系统公开招聘编外教师教师公告（146人）|2026-07-28", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年下半年四川成都大邑县教育系统公开招聘编外教师教师公告（146人）", "date": "2026-07-28", "count": 146, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-188174.html"}, {"key": "2026—2027学年四川成都市沙河中学学校编外教师招聘公告（21人）|2026-07-28", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026—2027学年四川成都市沙河中学学校编外教师招聘公告（21人）", "date": "2026-07-28", "count": 21, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-188139.html"}, {"key": "2026年四川凉山会理市公开选调中小学、幼儿园教师的公告（84人）|2026-07-28", "area": "[凉山彝族自治州教师招聘]", "city": "凉山彝族自治州", "title": "2026年四川凉山会理市公开选调中小学、幼儿园教师的公告（84人）", "date": "2026-07-28", "count": 84, "bianzhi": "选调", "url": "https://www.zhaojiao.net/zhaojiao/show-188137.html"}, {"key": "2026—2027学年四川成都市第十八中学校编外教师招聘公告(16人)|2026-07-28", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026—2027学年四川成都市第十八中学校编外教师招聘公告(16人)", "date": "2026-07-28", "count": 16, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-188124.html"}, {"key": "2026年四川达州市达川区考核招聘26届省属公费师范毕业生公告（77人）|2026-07-27", "area": "[达州市教师招聘]", "city": "达州市", "title": "2026年四川达州市达川区考核招聘26届省属公费师范毕业生公告（77人）", "date": "2026-07-27", "count": 77, "bianzhi": "编制", "url": "https://www.zhaojiao.net/zhaojiao/show-188084.html"}, {"key": "2026年四川省成都市郫都区第一中学招聘教师公告（11人）|2026-07-25", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川省成都市郫都区第一中学招聘教师公告（11人）", "date": "2026-07-25", "count": 11, "bianzhi": "未知", "url": "https://www.zhaojiao.net/zhaojiao/show-187987.html"}, {"key": "2026年四川成都高新区西园街道公办幼儿园招聘编外教师岗（7人）|2026-07-25", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都高新区西园街道公办幼儿园招聘编外教师岗（7人）", "date": "2026-07-25", "count": 7, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-187972.html"}, {"key": "2026年四川成都邛崃市教育系统招聘编外教师公告（127人）|2026-07-25", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都邛崃市教育系统招聘编外教师公告（127人）", "date": "2026-07-25", "count": 127, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-187932.html"}, {"key": "2026年四川绵阳盐亭县四川省属公费师范毕业生直接考核招聘公告（8人）|2026-07-24", "area": "[绵阳市教师招聘]", "city": "绵阳市", "title": "2026年四川绵阳盐亭县四川省属公费师范毕业生直接考核招聘公告（8人）", "date": "2026-07-24", "count": 8, "bianzhi": "编制", "url": "https://www.zhaojiao.net/zhaojiao/show-187898.html"}, {"key": "2026年四川德阳广汉市考核招聘教师公告（12人）|2026-07-24", "area": "[德阳市教师招聘]", "city": "德阳市", "title": "2026年四川德阳广汉市考核招聘教师公告（12人）", "date": "2026-07-24", "count": 12, "bianzhi": "编制", "url": "https://www.zhaojiao.net/zhaojiao/show-187891.html"}, {"key": "2026年四川成都高新区和美实验幼儿园（含成都高新区和美梓州幼儿园）招聘教师岗（19人）|2026-07-24", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都高新区和美实验幼儿园（含成都高新区和美梓州幼儿园）招聘教师岗（19人）", "date": "2026-07-24", "count": 19, "bianzhi": "未知", "url": "https://www.zhaojiao.net/zhaojiao/show-187875.html"}, {"key": "2026年四川成都市龙泉驿区第四小学校招聘教师公告(2人)|2026-07-24", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都市龙泉驿区第四小学校招聘教师公告(2人)", "date": "2026-07-24", "count": 2, "bianzhi": "未知", "url": "https://www.zhaojiao.net/zhaojiao/show-187871.html"}, {"key": "2026年四川成都市龙泉驿区特殊教育学校招聘教师公告(1人)|2026-07-24", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都市龙泉驿区特殊教育学校招聘教师公告(1人)", "date": "2026-07-24", "count": 1, "bianzhi": "未知", "url": "https://www.zhaojiao.net/zhaojiao/show-187872.html"}, {"key": "2026年四川成都市龙泉驿区航天小学校招聘教师公告(2人)|2026-07-24", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都市龙泉驿区航天小学校招聘教师公告(2人)", "date": "2026-07-24", "count": 2, "bianzhi": "未知", "url": "https://www.zhaojiao.net/zhaojiao/show-187873.html"}, {"key": "2026年四川成都都江堰市教育系统招聘编外教师公告（118人）|2026-07-24", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都都江堰市教育系统招聘编外教师公告（118人）", "date": "2026-07-24", "count": 118, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-187869.html"}, {"key": "2026年四川成都市龙泉驿区柏合九年制学校招聘教师公告（6人）|2026-07-24", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都市龙泉驿区柏合九年制学校招聘教师公告（6人）", "date": "2026-07-24", "count": 6, "bianzhi": "未知", "url": "https://www.zhaojiao.net/zhaojiao/show-187862.html"}, {"key": "2026年四川泸州市纳溪区江南职业中学招聘教师公告（8人）|2026-07-24", "area": "[泸州市教师招聘]", "city": "泸州市", "title": "2026年四川泸州市纳溪区江南职业中学招聘教师公告（8人）", "date": "2026-07-24", "count": 8, "bianzhi": "未知", "url": "https://www.zhaojiao.net/zhaojiao/show-187841.html"}, {"key": "2026年四川成都市温江区教育局所属15所“两自一包”学校公开招聘教师公告（314人）|2026-07-24", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都市温江区教育局所属15所“两自一包”学校公开招聘教师公告（314人）", "date": "2026-07-24", "count": 314, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-187835.html"}, {"key": "2026年四川南充营山县引进高层次人才30人公告（含教师岗12人）|2026-07-24", "area": "[南充市教师招聘]", "city": "南充市", "title": "2026年四川南充营山县引进高层次人才30人公告（含教师岗12人）", "date": "2026-07-24", "count": 12, "bianzhi": "编制", "url": "https://www.zhaojiao.net/zhaojiao/show-187814.html"}, {"key": "2026年四川达州渠县考核招聘26届省属公费师范毕业生公告（38人）|2026-07-23", "area": "[达州市教师招聘]", "city": "达州市", "title": "2026年四川达州渠县考核招聘26届省属公费师范毕业生公告（38人）", "date": "2026-07-23", "count": 38, "bianzhi": "编制", "url": "https://www.zhaojiao.net/zhaojiao/show-187798.html"}, {"key": "2026年四川成都都江堰市实验中学教师招聘公告（20人）|2026-07-23", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都都江堰市实验中学教师招聘公告（20人）", "date": "2026-07-23", "count": 20, "bianzhi": "未知", "url": "https://www.zhaojiao.net/zhaojiao/show-187785.html"}, {"key": "2026年四川德阳绵竹市教育和体育局部分学校选调系统内在编教职工公告（23人）|2026-07-23", "area": "[德阳市教师招聘]", "city": "德阳市", "title": "2026年四川德阳绵竹市教育和体育局部分学校选调系统内在编教职工公告（23人）", "date": "2026-07-23", "count": 23, "bianzhi": "选调", "url": "https://www.zhaojiao.net/zhaojiao/show-187754.html"}, {"key": "2026年四川成都市大弯中学初中学校公开招聘编外教师公告(4人)|2026-07-23", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都市大弯中学初中学校公开招聘编外教师公告(4人)", "date": "2026-07-23", "count": 4, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-187767.html"}, {"key": "2026年四川成都市大弯中学校(初中部)公开招聘编外教师公告(第二批_14人)|2026-07-23", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都市大弯中学校(初中部)公开招聘编外教师公告(第二批_14人)", "date": "2026-07-23", "count": 14, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-187768.html"}, {"key": "2026年四川成都市锦江区教育局公办幼儿园员额（储备）教师招聘公告（41人）|2026-07-23", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都市锦江区教育局公办幼儿园员额（储备）教师招聘公告（41人）", "date": "2026-07-23", "count": 41, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-187763.html"}, {"key": "2026年四川成都市第三幼儿园国恒街分园公开招聘员额教师公告(9人)|2026-07-23", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都市第三幼儿园国恒街分园公开招聘员额教师公告(9人)", "date": "2026-07-23", "count": 9, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-187759.html"}, {"key": "2026年四川成都市第三幼儿园蒲葵分园公开招聘员额教师公告（7人）|2026-07-23", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都市第三幼儿园蒲葵分园公开招聘员额教师公告（7人）", "date": "2026-07-23", "count": 7, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-187760.html"}, {"key": "2026年四川成都市第三幼儿园金融城分园公开招聘员额教师公告(3人)|2026-07-23", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都市第三幼儿园金融城分园公开招聘员额教师公告(3人)", "date": "2026-07-23", "count": 3, "bianzhi": "编外", "url": "https://www.zhaojiao.net/zhaojiao/show-187761.html"}, {"key": "2026年四川成都市锦江区水杉街幼儿园招聘教师公告（22人）|2026-07-23", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川成都市锦江区水杉街幼儿园招聘教师公告（22人）", "date": "2026-07-23", "count": 22, "bianzhi": "未知", "url": "https://www.zhaojiao.net/zhaojiao/show-187742.html"}, {"key": "2026年四川南充嘉陵区实验小学附属幼儿园专任教师及保育员招聘公告（15人）|2026-07-23", "area": "[南充市教师招聘]", "city": "南充市", "title": "2026年四川南充嘉陵区实验小学附属幼儿园专任教师及保育员招聘公告（15人）", "date": "2026-07-23", "count": 15, "bianzhi": "未知", "url": "https://www.zhaojiao.net/zhaojiao/show-187740.html"}, {"key": "2026年四川达州开江县城普学校考调教师公告（82人）|2026-07-23", "area": "[达州市教师招聘]", "city": "达州市", "title": "2026年四川达州开江县城普学校考调教师公告（82人）", "date": "2026-07-23", "count": 82, "bianzhi": "选调", "url": "https://www.zhaojiao.net/zhaojiao/show-187715.html"}, {"key": "2026年四川宜宾三江新区事业单位第二次考核招聘教师公告（65人）|2026-07-22", "area": "[宜宾市教师招聘]", "city": "宜宾市", "title": "2026年四川宜宾三江新区事业单位第二次考核招聘教师公告（65人）", "date": "2026-07-22", "count": 65, "bianzhi": "编制", "url": "https://www.zhaojiao.net/zhaojiao/show-187638.html"}, {"key": "2026年四川泸州市纳溪区考核招聘教师公告（1人）|2026-07-22", "area": "[泸州市教师招聘]", "city": "泸州市", "title": "2026年四川泸州市纳溪区考核招聘教师公告（1人）", "date": "2026-07-22", "count": 1, "bianzhi": "编制", "url": "https://www.zhaojiao.net/zhaojiao/show-187637.html"}, {"key": "2026年四川省成都市西北中学招聘教师公告（9人）|2026-07-22", "area": "[成都市教师招聘]", "city": "成都市", "title": "2026年四川省成都市西北中学招聘教师公告（9人）", "date": "2026-07-22", "count": 9, "bianzhi": "未知", "url": "https://www.zhaojiao.net/zhaojiao/show-187627.html"}]</script>
+<script type="application/json" id="stats-data">{"total_zj": 123, "total_bm_active": 3, "total_bm_closed": 3, "cities": {"成都市": 66, "达州市": 8, "乐山市": 7, "绵阳市": 6, "凉山彝族自治州": 6, "泸州市": 6, "自贡市": 4, "广元市": 3, "巴中市": 3, "阿坝藏族羌族自治州": 2, "遂宁市": 2, "广安市": 2, "雅安市": 2, "德阳市": 2, "南充市": 2, "内江市": 1, "宜宾市": 1}, "bianzhi": {"编制": 23, "编外": 59, "选调": 10, "未知": 31}, "daily": [["2026-07-22", 3], ["2026-07-23", 12], ["2026-07-24", 11], ["2026-07-25", 3], ["2026-07-27", 1], ["2026-07-28", 8], ["2026-07-29", 2], ["2026-07-30", 5], ["2026-07-31", 4], ["2026-08-03", 5], ["2026-08-04", 6], ["2026-08-06", 2], ["2026-08-07", 3], ["2026-08-08", 1], ["2026-08-10", 7], ["2026-08-11", 4], ["2026-08-12", 9], ["2026-08-13", 6], ["2026-08-14", 4], ["2026-08-17", 4], ["2026-08-18", 3], ["2026-08-19", 4], ["2026-08-20", 1], ["2026-08-21", 8], ["2026-08-22", 4]], "updated": "2026-08-23 12:09"}</script>
+<script>
+(function() {
+  // Data
+  var BM_DATA = JSON.parse(document.getElementById('bm-data').textContent);
+  var ZJ_DATA = JSON.parse(document.getElementById('zj-data').textContent);
+  var STATS = JSON.parse(document.getElementById('stats-data').textContent);
+  var chartsRendered = false;
+  var activeBzFilter = null;
+  var activeCityFilter = null;
+  var zjPage = 1;
+  var PAGE_SIZE = 30;
+
+  document.getElementById('updateTime').textContent = STATS.updated;
+  renderStats();
+  renderBmTab();
+  renderZjTable();
+  initBzFilters();
+  initCityFilters();
+
+  // Stats cards
+  function renderStats() {
+    var row = document.getElementById('statsRow');
+    var s = STATS;
+    row.innerHTML =
+      '<div class="stat-card c1"><div class="num">' + s.total_bm_active + '</div><div class="label">考生之家 · 进行中</div></div>' +
+      '<div class="stat-card c4"><div class="num">' + s.total_bm_closed + '</div><div class="label">考生之家 · 已结束</div></div>' +
+      '<div class="stat-card c2"><div class="num">' + s.total_zj + '</div><div class="label">招教网 · 招聘总数</div></div>' +
+      '<div class="stat-card c3"><div class="num">' + Object.keys(s.cities).length + '</div><div class="label">覆盖城市</div></div>';
+  }
+
+  // BM tab
+  function renderBmTab() {
+    var container = document.getElementById('bmTimeline');
+    var active = BM_DATA.active || [];
+    var closed = BM_DATA.closed || [];
+    var html = '';
+    if (active.length === 0) {
+      html += '<div class="no-results">暂无进行中的报名项目</div>';
+    }
+    active.forEach(function(e) {
+      var isEnding = e.phase === 'ongoing' && e.remaining !== null && e.remaining <= 120;
+      var cls = isEnding ? 'bm-card ending' : 'bm-card';
+      var cd = '';
+      if (e.remaining !== null) {
+        var cdClass, cdText;
+        if (e.remaining < 60) { cdText = e.remaining + '分钟'; cdClass = 'urgent'; }
+        else if (e.remaining < 1440) { cdText = Math.floor(e.remaining / 60) + '小时'; cdClass = 'warn'; }
+        else { cdText = Math.floor(e.remaining / 1440) + '天'; cdClass = 'ok'; }
+        cd = '<span class="countdown ' + cdClass + '">⏳ ' + cdText + '</span>';
+      }
+      html += '<div class="' + cls + '">' +
+        '<div class="bm-title">【' + (e.area || '') + '】' + e.name + ' ' + cd + '</div>' +
+        '<div class="bm-meta">' +
+        '<span>📅 ' + (e.start || '?') + ' ~ ' + (e.end || '?') + '</span>' +
+        (e.pay_start ? '<span>💰 缴费 ' + e.pay_start + ' ~ ' + e.pay_end + '</span>' : '') +
+        (e.phase === 'upcoming' ? '<span>⏳ 即将开始</span>' : '<span>🔴 报名中</span>') +
+        '</div></div>';
+    });
+    if (closed.length > 0) {
+      html += '<h4 style="margin:20px 0 12px;color:var(--muted)">📁 近期已结束 (' + closed.length + ')</h4>';
+      closed.forEach(function(c) {
+        html += '<div style="padding:6px 0;color:var(--muted);font-size:14px">· ' + c.name + '</div>';
+      });
+    }
+    container.innerHTML = html;
+  }
+
+  // ZJ charts - only render when zj tab becomes visible
+  function renderZjCharts() {
+    if (chartsRendered) return;
+    chartsRendered = true;
+    var cities = STATS.cities;
+    new Chart(document.getElementById('chartCity'), {
+      type: 'bar', data: { labels: Object.keys(cities), datasets: [{ label: '招聘数量', data: Object.values(cities), backgroundColor: '#3498db', borderRadius: 4 }] },
+      options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } }, scales: { x: { ticks: { stepSize: 5 } } } }
+    });
+    var bz = STATS.bianzhi;
+    new Chart(document.getElementById('chartBianzhi'), {
+      type: 'doughnut', data: { labels: ['编制', '编外', '选调', '未知'], datasets: [{ data: [bz['编制'], bz['编外'], bz['选调'], bz['未知']], backgroundColor: ['#27ae60', '#e74c3c', '#3498db', '#bdc3c7'], borderWidth: 0 }] },
+      options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { padding: 16, usePointStyle: true } } } }
+    });
+    var daily = STATS.daily;
+    new Chart(document.getElementById('chartDaily'), {
+      type: 'line', data: { labels: daily.map(function(d) { return d[0]; }), datasets: [{ label: '每日新增', data: daily.map(function(d) { return d[1]; }), borderColor: '#3498db', backgroundColor: 'rgba(52,152,219,0.1)', fill: true, tension: 0.3, pointRadius: 4, pointBackgroundColor: '#3498db' }] },
+      options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { ticks: { stepSize: 1 } } } }
+    });
+  }
+
+  // ZJ table
+  function initBzFilters() {
+    var container = document.getElementById('bzFilters');
+    ['全部', '编制', '编外', '选调', '未知'].forEach(function(t) {
+      var btn = document.createElement('button');
+      btn.className = 'filter-btn' + (t === '全部' ? ' active' : '');
+      btn.textContent = t;
+      btn.onclick = function() {
+        document.querySelectorAll('#bzFilters .filter-btn').forEach(function(b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        activeBzFilter = t === '全部' ? null : t;
+        zjPage = 1;
+        renderZjTable();
+      };
+      container.appendChild(btn);
+    });
+  }
+
+  function initCityFilters() {
+    var container = document.getElementById('cityFilters');
+    var cities = Object.keys(STATS.cities);
+    container.innerHTML = '';
+    // Add "全部" button
+    var allBtn = document.createElement('button');
+    allBtn.className = 'filter-btn city-btn active';
+    allBtn.textContent = '全部';
+    allBtn.onclick = function() {
+      document.querySelectorAll('#cityFilters .filter-btn').forEach(function(b) { b.classList.remove('active'); });
+      allBtn.classList.add('active');
+      activeCityFilter = null;
+      zjPage = 1;
+      renderZjTable();
+    };
+    container.appendChild(allBtn);
+    // Add each city button
+    cities.forEach(function(c) {
+      var btn = document.createElement('button');
+      btn.className = 'filter-btn city-btn';
+      btn.textContent = c + ' (' + STATS.cities[c] + ')';
+      btn.onclick = function() {
+        document.querySelectorAll('#cityFilters .filter-btn').forEach(function(b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        activeCityFilter = c;
+        zjPage = 1;
+        renderZjTable();
+      };
+      container.appendChild(btn);
+    });
+  }
+
+  function renderZjTable() {
+    var search = (document.getElementById('zjSearch').value || '').toLowerCase();
+    var filtered = ZJ_DATA;
+    if (activeBzFilter) { filtered = filtered.filter(function(e) { return e.bianzhi === activeBzFilter; }); }
+    if (activeCityFilter) { filtered = filtered.filter(function(e) { return e.city === activeCityFilter; }); }
+    if (search) { filtered = filtered.filter(function(e) { return (e.title || '').toLowerCase().indexOf(search) >= 0 || (e.city || '').toLowerCase().indexOf(search) >= 0; }); }
+
+    var totalPages = Math.ceil(filtered.length / PAGE_SIZE) || 1;
+    if (zjPage > totalPages) zjPage = totalPages;
+    var start = (zjPage - 1) * PAGE_SIZE;
+    var pageData = filtered.slice(start, start + PAGE_SIZE);
+
+    document.getElementById('zjTableInfo').textContent = '显示 ' + (start + 1) + '-' + Math.min(start + PAGE_SIZE, filtered.length) + ' / 共 ' + filtered.length + ' 条';
+
+    var pageHtml = '';
+    for (var i = 1; i <= totalPages; i++) {
+      pageHtml += '<button class="page-btn' + (i === zjPage ? ' active' : '') + '" onclick="window._goPage(' + i + ')">' + i + '</button>';
+    }
+    document.getElementById('zjPages').innerHTML = pageHtml;
+
+    var tbody = document.querySelector('#zjTable tbody');
+    var noResults = document.getElementById('zjNoResults');
+    if (filtered.length === 0) {
+      tbody.innerHTML = '';
+      noResults.style.display = 'block';
+      document.getElementById('zjTableInfo').textContent = '共 0 条';
+      return;
+    }
+    noResults.style.display = 'none';
+
+    var badgeClass = { '编制': 'badge-biannei', '编外': 'badge-bianwai', '选调': 'badge-xuandiao', '未知': 'badge-unknown' };
+    tbody.innerHTML = pageData.map(function(e) {
+      var bz = e.bianzhi || '未知';
+      var isHot = e.date === '热门推荐';
+      return '<tr><td><span class="badge ' + (badgeClass[bz] || 'badge-unknown') + '">' + bz + '</span></td>' +
+        '<td>' + (e.city || '?') + '</td>' +
+        '<td style="max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><a href="' + (e.url || '#') + '" target="_blank" title="' + e.title.replace(/"/g, '&quot;') + '" style="color:var(--text);text-decoration:none">' + e.title + '</a></td>' +
+        '<td>' + (e.count ? e.count + '人' : '-') + '</td>' +
+        '<td>' + (isHot ? '<span class="badge badge-hot">热门</span>' : e.date) + '</td></tr>';
+    }).join('');
+  }
+
+  // Expose page nav function
+  window._goPage = function(p) { zjPage = p; renderZjTable(); };
+
+  // Tab switching
+  window.switchTab = function(name) {
+    document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+    document.querySelectorAll('.tab-content').forEach(function(c) { c.classList.remove('active'); });
+    document.getElementById('tab-' + name).classList.add('active');
+    if (name === 'bm') document.querySelector('.tab-btn').classList.add('active');
+    else document.querySelectorAll('.tab-btn')[1].classList.add('active');
+    if (name === 'zj' && !chartsRendered) renderZjCharts();
+  };
+})();
+</script>
+</body>
+</html>
